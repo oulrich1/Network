@@ -317,13 +317,15 @@ namespace ml {
         if (!inputMat.IsGood())
             return;
 
-        // Add bias unit:
-        pushBiasCol<T>(inputMat);
+        // Add bias units:
+		for (int i = 0; i < GetNumBiasNodes(); ++i)
+			pushBiasCol<T>(inputMat);
 
         // perform weight and activation
         this->mActivated = inputMat.Copy(); // todo: activate these with sigmoid or gaussian
         for (auto sib : this->siblings) {
             auto weightIt = this->weights.find(sib);
+			// weight the inputMat from this layer to the sibling layer
             if (weightIt != this->weights.end()) {
                 // expect row vec (or num cols == num nodes in sibling layer), true for "Is param 2 transposed already"
                 this->mOutputs[sib] = ml::Mult<T>(inputMat, weightIt->second, true);
@@ -331,6 +333,7 @@ namespace ml {
             }
         }
     }
+
     template <typename T>
     typename ml::Mat<T>::Row Layer<T>::activate(typename ml::Mat<T>::Row in) {
         return typename ml::Mat<T>::Row();
@@ -395,6 +398,15 @@ namespace ml {
         virtual void setActivatedInput(ml::Mat<T> activatedInput) override;
         // Network implementation: can connect ILayers together.. which includes {Layer, Network}
         // So, a network can connect multiple networks together into one larger network, recursivly
+
+		/// sizing properties.. overridden to support asking network for the size of it's input and output.
+	public:
+		virtual void setNumInputNodes(size_t nInputNodes) override;
+		virtual size_t getNumInputNodes() const override;
+		virtual void setNumOutputNodes(size_t nOutputNodes) override;
+		virtual size_t getNumOutputNodes() const override;
+		virtual size_t getOutputSize() const override;
+		virtual size_t getInputSize() const override;
 
     protected:
         void common_construct();
@@ -470,6 +482,12 @@ namespace ml {
 
     template <typename T>
     void Network<T>::initWeights(ILayer<T>* pSib) {
+		const int numInputPerNode = this->getOutputSize();  // num input to each node in next layer
+		const int numNodesNextLayer = pSib->getInputSize();   // num nodes in next layer
+		const T mean = 0.1, stddev = 0.01;
+		// Note: the weights are initialized such that each row is the weight cooeficients for the input into the sibling
+		// the sibling has "numNodesNextLayer" therefore, it is clear that there are that many weights. One per next node.
+		this->weights[pSib] = ml::initWeightsNormalDist<T>(numNodesNextLayer, numInputPerNode, mean, stddev);
     }
 
 
@@ -559,6 +577,53 @@ namespace ml {
         pOutputLayer->setActivatedInput(activatedInput);
     }
 
+
+	/// Sizing 
+    template <typename T>
+	void Network<T>::setNumInputNodes(size_t nInputNodes)
+	{
+		ILayer<T>* pLayer = getInputLayer();
+		if (pLayer)
+			pLayer->setNumInputNodes(nInputNodes);
+	}
+
+    template <typename T>
+	size_t Network<T>::getNumInputNodes() const 
+	{ 
+		ILayer<T>* pLayer = getInputLayer();
+		return pLayer ? pLayer->getNumInputNodes() : 0;
+	}
+
+    template <typename T>
+	void Network<T>::setNumOutputNodes(size_t nOutputNodes)
+	{
+		ILayer<T>* pLayer = getOutputLayer();
+		if (pLayer)
+			pLayer->setNumOutputNodes(nOutputNodes);
+	}
+
+    template <typename T>
+	size_t Network<T>::getNumOutputNodes() const 
+	{ 
+		ILayer<T>* pLayer = getOutputLayer();
+		return pLayer ? pLayer->getNumOutputNodes() : 0;
+	}
+
+    template <typename T>
+	size_t Network<T>::getOutputSize() const 
+	{ 
+		return getNumOutputNodes(); 
+	}
+
+    template <typename T>
+	size_t Network<T>::getInputSize() const 
+	{ 
+		return getNumInputNodes(); 
+	}
+
+	/// End sizing
+
+	
     template <typename T>
     ml::Mat<T> Network<T>::getOutput() {
         return getActivatedInput();

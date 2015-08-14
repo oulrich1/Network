@@ -285,6 +285,8 @@ void matrix_copy(Matrix_T<T>* src, Matrix_T<T>* dst)
 template <typename T>
 Matrix_T<T>* matrix_copy(Matrix_T<T>* mat) {
     Matrix_T<T>* newMat = NULL;
+	if (!mat)
+		return newMat;
     int height = mat->row_count;
     int width = mat->col_count;
     if (height <= 0 || width <= 0)
@@ -681,7 +683,8 @@ namespace ml {
     template <typename T>
     Mat<T> Mat<T>::Copy() const {
         Mat<T> mat;
-        mat.mMat = MatrixPtr(matrix_copy<T>(mMat.get()));
+		if (mMat)
+			mat.mMat = MatrixPtr(matrix_copy<T>(mMat.get()));
         return mat;
     }
 

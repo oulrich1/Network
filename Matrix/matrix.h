@@ -444,8 +444,9 @@ namespace ml {
 namespace ml {
     template <typename T>
     ml::Mat<T> initWeightsNormalDist(int rows, int cols, T mean=0.001f, T stddev=0.0001f) {
-        ml::Mat<T> weights(rows, cols, 1);
-
+        ml::Mat<T> weights(rows, cols, 0);
+		if (stddev == 0)
+			return weights;
         std::random_device rd;
         std::mt19937 gen(rd());
         std::normal_distribution<> d(mean, stddev);
