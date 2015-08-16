@@ -126,6 +126,7 @@ void test_crazy_network_1() {
     network->connect(l3, l2); // note: circularity back to l2
     network->connect(l4, l2); //       here again as well
     network->connect(l4, l5); // note: connecting subnet arbitrarily to another layer..
+    network->setOutputLayer(l5);
 
     // Proper way to finish defining a subnet after completely defining which 
     // network owns the recurrent layers (l2 is owned by parent network..)
@@ -140,13 +141,12 @@ void test_crazy_network_1() {
     }
 
     // Finish defining parent network and init.. feed.. train..
-    network->setOutputLayer(l5);
     network->init();
     ml::Mat<T> input(1, 100, 1); // input vec must be the same size as the input layer's size
     network->feed(input);
 
     ml::Mat<T> samples(100, 100, 1);
-    ml::Mat<T> nominals(1, 100, 2); 
+    ml::Mat<T> nominals(1, 2, 0); 
     network->train(samples, nominals);
 
     timer.stop();

@@ -330,13 +330,14 @@ namespace ml {
         if (!inputMat.IsGood())
             return;
 
-        // Add bias units:
-		for (int i = 0; i < GetNumBiasNodes(); ++i)
-			pushBiasCol<T>(inputMat);
-
         // Activate the input 
         /// todo: activate these with sigmoid or gaussian
-        this->mActivated = inputMat.Copy(); 
+        //setActivatedInput(inputMat.Copy());
+        this->mActivated = inputMat.Copy();
+
+        // Add bias units:
+        for (int i = 0; i < GetNumBiasNodes(); ++i)
+            pushBiasCol<T>(inputMat);
 
         // weight the activated node values and provide weighted sums to next layer's nodes
         for (auto sib : this->siblings) {
@@ -400,6 +401,7 @@ namespace ml {
         virtual void        backprop(const ml::Mat<T>& output_errors);
         virtual ml::Mat<T>  getOutput();
         virtual void        connect(ILayer<T>* l1, ILayer<T>* l2);
+        virtual void connect(ILayer<T>* nextLayer);
 
         // ILayer<T> overrides
     public:
@@ -428,10 +430,16 @@ namespace ml {
         void common_construct();
 
     protected:
+        void addOutputLayerSiblings(ILayer<T>* nextLayer);
+
+    protected:
         void updateLayersMaps(ILayer<T>* layer);        // updates both global map and instance map
         void AddToNetworkLayersMap(ILayer<T>* layer);   // adds to instance map ref to layer to own
         void resetNetworkIsVisited();                   // resets this' own layers' visited flags..
         std::map<ILayer<T>*, ILayer<T>*> mNetworkLayersMap; // local to instance, vs global to all layers see: mLayersMap
+
+    private:
+        std::vector<ILayer<T>*> mOutputLayerSiblingCache;
 
     private:
         ILayer<T>* pInputLayer;
@@ -459,7 +467,7 @@ namespace ml {
 
     template <typename T>
     Network<T>::~Network() {
-
+        mOutputLayerSiblingCache.clear();
     }
 
 
@@ -472,6 +480,11 @@ namespace ml {
     template <typename T>
     void Network<T>::setOutputLayer(ILayer<T>* pOutLayer) {
         pOutputLayer = pOutLayer;
+        if (mOutputLayerSiblingCache.size() > 0 && pOutputLayer != NULL) {
+            for (ILayer<T>* pLayer : mOutputLayerSiblingCache)
+                pOutputLayer->connect(pLayer);
+            mOutputLayerSiblingCache.clear();
+        }
     }
 
 
@@ -530,6 +543,7 @@ namespace ml {
 
     template <typename T>
     void Network<T>::train(const ml::Mat<T>& samples, const ml::Mat<T>& nominals) {
+        ILayer<T>::resetAllIsVisited();
         for (int i = 0; i < samples.size().cy; ++i) {
             ml::Mat<T> row = ml::Mat<T>(samples.row(i), samples.size().cx);
             ml::Mat<T> predicted = feed(row);
@@ -540,6 +554,7 @@ namespace ml {
 
     template <typename T>
     ml::Mat<T> Network<T>::feed(const ml::Mat<T>& in)  {
+        ILayer<T>::resetAllIsVisited();
         this->feed(in, 0);
         return this->getOutput();
     }
@@ -594,14 +609,14 @@ namespace ml {
 
     template <typename T>
     ml::Mat<T> Network<T>::getActivatedInput() {
-        if (!pOutputLayer) return ml::Mat<T>();
-        return pOutputLayer->getActivatedInput();
+        if (!pInputLayer) return ml::Mat<T>();
+        return pInputLayer->getActivatedInput();
     }
 
     template <typename T>
     void Network<T>::setActivatedInput(ml::Mat<T> activatedInput) {
-        if (!pOutputLayer) return;
-        pOutputLayer->setActivatedInput(activatedInput);
+        if (!pInputLayer) return;
+        pInputLayer->setActivatedInput(activatedInput);
     }
 
 
@@ -659,7 +674,8 @@ namespace ml {
 	
     template <typename T>
     ml::Mat<T> Network<T>::getOutput() {
-        return getActivatedInput();
+        if (!pOutputLayer) return ml::Mat<T>();
+        return pOutputLayer->getActivatedInput();
     }
 
     template <typename T>
@@ -682,6 +698,21 @@ namespace ml {
         l1->connect(l2);
         updateLayersMaps(l1);
         updateLayersMaps(l2);
+    }
+
+    template <typename T>
+    void Network<T>::connect(ILayer<T>* nextLayer) {
+        ILayer<T>* pLayer = this->getOutputLayer();
+        if (pLayer) {   // connect the output to the sibling right away if possible
+            pLayer->connect(nextLayer);
+        } else {        // otherwise cache it for later, when we set output then we check the sibling cache
+            this->addOutputLayerSiblings(nextLayer);
+        }
+    }
+
+    template <typename T>
+    void Network<T>::addOutputLayerSiblings(ILayer<T>* sibling) {
+        mOutputLayerSiblingCache.push_back(sibling);
     }
 
 } // namespace ml
