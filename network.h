@@ -82,7 +82,7 @@ namespace ml {
         virtual void feed(ml::Mat<T> in, int epoch) = 0;
         virtual typename ml::Mat<T>::Row activate(typename ml::Mat<T>::Row in) = 0;
         virtual void activate(int nodeIdx, T in) = 0;
-        virtual void initWeights(ILayer<T>* pSib) = 0;
+        virtual void initWeights(ILayer<T>* pSib);
         virtual ml::Mat<T> getActivatedInput() = 0;
         virtual void setActivatedInput(ml::Mat<T> activatedInput) = 0;
 
@@ -200,6 +200,17 @@ namespace ml {
     }
 
 
+    template <typename T>
+    void ILayer<T>::initWeights(ILayer<T>* pSib) {
+        const int numInputPerNode = this->getOutputSize();  // num input to each node in next layer
+        const int numNodesNextLayer = pSib->getInputSize();   // num nodes in next layer
+        const T mean = 0.1, stddev = 0.01;
+        // Note: the weights are initialized such that each row is the weight cooeficients for the input into the sibling
+        // the sibling has "numNodesNextLayer" therefore, it is clear that there are that many weights. One per next node.
+        this->weights[pSib] = ml::initWeightsNormalDist<T>(numNodesNextLayer, numInputPerNode, mean, stddev);
+    }
+
+
     /* Shoudl get called upon construction of an ILayer.. */
     template <typename T>
     void ILayer<T>::AddToLayersMap(ILayer<T>* layer) {
@@ -256,7 +267,7 @@ namespace ml {
     public:
         typedef ILayer<T> baseclass;
     public:
-        Layer(int numNodes);
+        Layer(int numNodes, std::string name = "");
         virtual ~Layer();
 
     protected:
@@ -268,16 +279,16 @@ namespace ml {
         virtual void feed(ml::Mat<T> in, int epoch) override;
         virtual typename ml::Mat<T>::Row activate(typename ml::Mat<T>::Row in) override;
         virtual void activate(int nodeIdx, T in) override;
-        virtual void initWeights(ILayer<T>* pSib) override;
         virtual ml::Mat<T> getActivatedInput() override;
         virtual void setActivatedInput(ml::Mat<T> activatedInput) override;
     };
 
 
     template <typename T>
-    Layer<T>::Layer(int numNodes) {
+    Layer<T>::Layer(int numNodes, std::string name) : baseclass() {
         this->setNumInputNodes(numNodes);
         common_construct();
+        baseclass::setName(name);
     }
 
     template <typename T>
@@ -288,17 +299,6 @@ namespace ml {
     template <typename T>
     Layer<T>::~Layer() {
 
-    }
-
-    /* Set's this' weights based on size of pSib.. (the next layer) */
-    template <typename T>
-    void Layer<T>::initWeights(ILayer<T>* pSib) {
-        const int numInputPerNode = this->getOutputSize();  // num input to each node in next layer
-        const int numNodesNextLayer = pSib->getInputSize();   // num nodes in next layer
-        const T mean = 0.1, stddev = 0.01;
-        // Note: the weights are initialized such that each row is the weight cooeficients for the input into the sibling
-        // the sibling has "numNodesNextLayer" therefore, it is clear that there are that many weights. One per next node.
-        this->weights[pSib] = ml::initWeightsNormalDist<T>(numNodesNextLayer, numInputPerNode, mean, stddev);
     }
 
     template <typename T>
@@ -383,9 +383,11 @@ namespace ml {
 
 
     public:
-        virtual ml::Mat<T> feed(const ml::Mat<T>& in);
-        virtual ml::Mat<T> getOutput();
-        virtual void connect(ILayer<T>* l1, ILayer<T>* l2);
+        virtual void        train(const ml::Mat<T>& samples);
+        virtual ml::Mat<T>  feed(const ml::Mat<T>& in);
+        virtual void        backprop(const ml::Mat<T>& output_errors);
+        virtual ml::Mat<T>  getOutput();
+        virtual void        connect(ILayer<T>* l1, ILayer<T>* l2);
 
         // ILayer<T> overrides
     public:
@@ -393,7 +395,6 @@ namespace ml {
         virtual void feed(ml::Mat<T> in, int epoch) override;
         virtual typename ml::Mat<T>::Row activate(typename ml::Mat<T>::Row in) override;
         virtual void activate(int nodeIdx, T in) override;
-        virtual void initWeights(ILayer<T>* pSib) override;
         virtual ml::Mat<T> getActivatedInput() override;
         virtual void setActivatedInput(ml::Mat<T> activatedInput) override;
         // Network implementation: can connect ILayers together.. which includes {Layer, Network}
@@ -481,17 +482,6 @@ namespace ml {
 
 
     template <typename T>
-    void Network<T>::initWeights(ILayer<T>* pSib) {
-		const int numInputPerNode = this->getOutputSize();  // num input to each node in next layer
-		const int numNodesNextLayer = pSib->getInputSize();   // num nodes in next layer
-		const T mean = 0.1, stddev = 0.01;
-		// Note: the weights are initialized such that each row is the weight cooeficients for the input into the sibling
-		// the sibling has "numNodesNextLayer" therefore, it is clear that there are that many weights. One per next node.
-		this->weights[pSib] = ml::initWeightsNormalDist<T>(numNodesNextLayer, numInputPerNode, mean, stddev);
-    }
-
-
-    template <typename T>
     std::stack<ILayer<T>*> makeSiblingStack(const typename ml::ILayer<T>::Siblings& _siblings) {
         std::stack<ILayer<T>*> sibStack;
         auto it = _siblings.begin();
@@ -517,10 +507,25 @@ namespace ml {
     }
 
     template <typename T>
+    void Network<T>::train(const ml::Mat<T>& samples) {
+        for (int i = 0; i < samples.size().cy; ++i) {
+            ml::Mat<T> row = ml::Mat<T>(samples.row(i), samples.size().cx);
+            feed(row);
+            ml::Mat<T> errors;
+            backprop(errors);
+        }
+    }
+
+    template <typename T>
     ml::Mat<T> Network<T>::feed(const ml::Mat<T>& in)  {
         reset_isvisited();
         this->feed(in, 0);
         return this->getOutputByID(this);
+    }
+
+    template <typename T>
+    void Network<T>::backprop(const ml::Mat<T>& output_errors) {
+        /// TODO:..
     }
 
     template <typename T>

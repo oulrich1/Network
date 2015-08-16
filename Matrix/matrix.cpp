@@ -583,6 +583,20 @@ namespace ml {
         mMat = mat.mMat;
     }
 
+    // the vector of rows will be copied into this mat..
+    template <typename T>
+    Mat<T>::Mat(std::vector<Row> rows, int row_size) {
+        mMat = MatrixPtr(matrix_create<T>(rows.size(), row_size));
+        for (int i = 0; i < rows.size(); ++i)
+            this->row(i, rows[i]); // does a copy
+    }
+
+    template <typename T>
+    Mat<T>::Mat(Row row, int row_size) {
+        mMat = MatrixPtr(matrix_create<T>(1, row_size));
+        this->row(0, row); // does a copy
+    }
+
     template <typename T>
     Mat<T>::Mat(MatrixPtr pMat) {
         mMat = pMat;

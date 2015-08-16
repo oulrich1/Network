@@ -176,6 +176,8 @@ namespace ml {
     public:
         Mat();
         Mat(const Mat& mat);
+        Mat(std::vector<Row> rows, const int row_size);
+        Mat(Row row, const int row_size);
         Mat(MatrixPtr pMat);
         Mat(int height, int width, int val = 0);
         Mat(const Size& size, int val = 0);
