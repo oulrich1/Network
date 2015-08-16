@@ -23,9 +23,6 @@ void test2() {
 	using namespace ml;
 	typedef double T;
 
-	ml::Mat<T> m = ml::initWeightsNormalDist<T>(5, 5, 0.01f, 2);
-	m.Print();
-
 	Timer<float> timer;
 	timer.start();
 	Network<T>* network = new Network<T>();
@@ -44,9 +41,9 @@ void test2() {
 	network->setOutputLayer(l4);
 	network->init();
 
-	ml::Mat<T> input(100, 100, 1);
-	network->feed(input);
-	ml::Mat<T> output = network->getOutput();
+	ml::Mat<T> samples(100, 100, 1);
+    ml::Mat<T> nominals(1, 10, 0); 
+    network->train(samples, nominals);
 
 	timer.stop();
 	cout << timer.getTime() << endl;
@@ -147,7 +144,7 @@ void test_crazy_network_1() {
 
     ml::Mat<T> samples(100, 100, 1);
     ml::Mat<T> nominals(1, 2, 0); 
-    network->train(samples, nominals);
+    // network->train(samples, nominals);
 
     timer.stop();
     cout << timer.getTime() << endl;

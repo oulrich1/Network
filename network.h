@@ -33,6 +33,17 @@ namespace ml {
         mat.pushCol(col);
         delete[] col;
     }
+
+
+    template <typename T>
+    ml::Mat<T> Sigmoid(ml::Mat<T> mat) {
+        return mat.Copy(); // TODO: implement as a sigmoid
+    }
+
+    template <typename T>
+    ml::Mat<T> SigGrad(ml::Mat<T> mat) {
+        return ml::ElementMult(mat, ml::Diff<T>(1, mat)); 
+    }
 }
 
 
@@ -69,7 +80,7 @@ namespace ml {
     public:
         typedef ml::Mat<T> Mat;
         typedef std::function<T(T)> Sigmoid;
-        typedef std::vector<ILayer<T>*> Siblings;
+        typedef std::vector<ILayer<T>*> LayerVector;
 
     public:
         ILayer() : INode<T>() { mNumInputNodes = 0; mNumOutputNodes = 0; }
@@ -83,6 +94,7 @@ namespace ml {
         virtual typename ml::Mat<T>::Row activate(typename ml::Mat<T>::Row in) = 0;
         virtual void activate(int nodeIdx, T in) = 0;
         virtual void initWeights(ILayer<T>* pSib);
+        virtual ml::Mat<T> getInput() = 0;
         virtual ml::Mat<T> getActivatedInput() = 0;
         virtual void setActivatedInput(ml::Mat<T> activatedInput) = 0;
 
@@ -99,14 +111,14 @@ namespace ml {
 
 
         // sizing properties
-        static size_t GetNumBiasNodes() { return 1; }
-        virtual void setNumInputNodes(size_t nInputNodes)
+        static size_t   GetNumBiasNodes() { return 1; }
+        virtual void    setNumInputNodes(size_t nInputNodes)
         {
             mNumInputNodes = nInputNodes;
             mNumOutputNodes = (mNumInputNodes + GetNumBiasNodes());
         }
-        virtual size_t getNumInputNodes() const { return mNumInputNodes; }
-        virtual void setNumOutputNodes(size_t nOutputNodes)
+        virtual size_t  getNumInputNodes() const { return mNumInputNodes; }
+        virtual void    setNumOutputNodes(size_t nOutputNodes)
         {
             mNumOutputNodes = nOutputNodes;
             mNumInputNodes = (mNumOutputNodes - GetNumBiasNodes());
@@ -118,9 +130,11 @@ namespace ml {
         virtual ml::Mat<T> getOutputByID(ILayer<T>* pID);
         virtual void setOutputByID(ILayer<T>* pID, ml::Mat<T> output);
 
-        virtual int getEpoch() const { return epoch; }
+        virtual int  getEpoch() const { return epoch; }
         virtual void setEpoch(int i) { epoch = i; }
 
+        // returns the weights that weigh the output from this layer to the next layer
+        virtual ml::Mat<T> getWeights(ILayer<T>* pNextLayer);
 
     protected:
         size_t mNumInputNodes;  // the num inputs into this layer
@@ -138,7 +152,13 @@ namespace ml {
         static std::map<ILayer<T>*, ILayer<T>*> mLayersMap;
 
     public:
-        Siblings& getSiblings() { return siblings; }
+        void setErrors(ml::Mat<T> errors) { m_errors = errors; }
+        ml::Mat<T> getErrors() const { return m_errors; }
+    protected:
+        ml::Mat<T> m_errors;
+
+    public:
+        LayerVector& getSiblings() { return siblings; }
         // each edge is a directed connection to a sibling.. (think of as next ptrs)
         std::vector<ILayer<T>*> siblings;
         std::vector<ILayer<T>*> dependancies;
@@ -146,7 +166,7 @@ namespace ml {
 
     protected:
         /// (0) We get input fed to us + input from dependancies
-        // inputs
+        ml::Mat<T> mInput;
 
         /// (1) the activated inputs into this layer. Will be weighted and sent as 
         /// output to next layers. Could be considered "output" from a network
@@ -223,6 +243,13 @@ namespace ml {
         this->weights[pSib] = ml::initWeightsNormalDist<T>(numNodesNextLayer, numInputPerNode, mean, stddev);
     }
 
+    template <typename T>
+    ml::Mat<T> ILayer<T>::getWeights(ILayer<T>* pNextLayer) {
+        auto it = weights.find(pNextLayer);
+        if(it != weights.end())
+            return it->second;
+        return ml::Mat<T>();
+    }
 
     /* Should get called upon construction of an ILayer.. */
     template <typename T>
@@ -292,6 +319,7 @@ namespace ml {
         virtual void feed(ml::Mat<T> in, int epoch) override;
         virtual typename ml::Mat<T>::Row activate(typename ml::Mat<T>::Row in) override;
         virtual void activate(int nodeIdx, T in) override;
+        virtual ml::Mat<T> getInput() override;
         virtual ml::Mat<T> getActivatedInput() override;
         virtual void setActivatedInput(ml::Mat<T> activatedInput) override;
     };
@@ -333,10 +361,11 @@ namespace ml {
         // Activate the input 
         /// todo: activate these with sigmoid or gaussian
         //setActivatedInput(inputMat.Copy());
-        this->mActivated = inputMat.Copy();
+        this->mInput     = inputMat.Copy();
+        this->mActivated = Sigmoid<T>(this->mActivated);
 
         // Add bias units:
-        for (int i = 0; i < GetNumBiasNodes(); ++i)
+        for (int i = 0; i < this->GetNumBiasNodes(); ++i)
             pushBiasCol<T>(inputMat);
 
         // weight the activated node values and provide weighted sums to next layer's nodes
@@ -356,6 +385,12 @@ namespace ml {
     template <typename T>
     void Layer<T>::activate(int nodeIdx, T in) {
 
+    }
+
+
+    template <typename T>
+    ml::Mat<T> Layer<T>::getInput() {
+        return this->mInput; 
     }
 
 
@@ -389,39 +424,40 @@ namespace ml {
         virtual ~Network();
 
     public:
-        virtual void setInputLayer(ILayer<T>* pInLayer);
-        virtual void setOutputLayer(ILayer<T>* pOutLayer);
-        virtual ILayer<T>* getInputLayer() const { return pInputLayer; }
-        virtual ILayer<T>* getOutputLayer() const { return pOutputLayer; }
+        virtual void        setInputLayer(ILayer<T>* pInLayer);
+        virtual void        setOutputLayer(ILayer<T>* pOutLayer);
+        virtual ILayer<T>*  getInputLayer() const { return pInputLayer; }
+        virtual ILayer<T>*  getOutputLayer() const { return pOutputLayer; }
 
 
     public:
         virtual void        train(const ml::Mat<T>& samples, const ml::Mat<T>& nominals);
         virtual ml::Mat<T>  feed(const ml::Mat<T>& in);
-        virtual void        backprop(const ml::Mat<T>& output_errors);
+        virtual void        backprop();
         virtual ml::Mat<T>  getOutput();
         virtual void        connect(ILayer<T>* l1, ILayer<T>* l2);
-        virtual void connect(ILayer<T>* nextLayer);
+        virtual void        connect(ILayer<T>* nextLayer);
 
         // ILayer<T> overrides
     public:
-        virtual void init() override;
-        virtual void feed(ml::Mat<T> in, int epoch) override;
+        virtual void        init() override;
+        virtual void        feed(ml::Mat<T> in, int epoch) override;
         virtual typename ml::Mat<T>::Row activate(typename ml::Mat<T>::Row in) override;
-        virtual void activate(int nodeIdx, T in) override;
-        virtual ml::Mat<T> getActivatedInput() override;
-        virtual void setActivatedInput(ml::Mat<T> activatedInput) override;
+        virtual void        activate(int nodeIdx, T in) override;
+        virtual ml::Mat<T>  getInput() override;
+        virtual ml::Mat<T>  getActivatedInput() override;
+        virtual void        setActivatedInput(ml::Mat<T> activatedInput) override;
         // Network implementation: can connect ILayers together.. which includes {Layer, Network}
         // So, a network can connect multiple networks together into one larger network, recursivly
 
 		/// sizing properties.. overridden to support asking network for the size of it's input and output.
 	public:
-		virtual void setNumInputNodes(size_t nInputNodes) override;
-		virtual size_t getNumInputNodes() const override;
-		virtual void setNumOutputNodes(size_t nOutputNodes) override;
-		virtual size_t getNumOutputNodes() const override;
-		virtual size_t getOutputSize() const override;
-		virtual size_t getInputSize() const override;
+		virtual void      setNumInputNodes(size_t nInputNodes) override;
+		virtual size_t    getNumInputNodes() const override;
+		virtual void      setNumOutputNodes(size_t nOutputNodes) override;
+		virtual size_t    getNumOutputNodes() const override;
+		virtual size_t    getOutputSize() const override;
+		virtual size_t    getInputSize() const override;
 
     public:
         virtual ml::Mat<T> getOutputByID(ILayer<T>* pID);
@@ -517,19 +553,19 @@ namespace ml {
     }
 
     template <typename T>
-    std::stack<ILayer<T>*> makeSiblingStack(const typename ml::ILayer<T>::Siblings& _siblings) {
+    std::stack<ILayer<T>*> makeLayerStack(const typename ml::ILayer<T>::LayerVector& layers) {
         std::stack<ILayer<T>*> sibStack;
-        auto it = _siblings.begin();
-        for (; it != _siblings.end(); ++it)
+        auto it = layers.begin();
+        for (; it != layers.end(); ++it)
             sibStack.push(*it);
         return sibStack;
     }
 
     template <typename T>
-    std::stack<ILayer<T>*> makeSiblingStackNotVisited(const typename ml::ILayer<T>::Siblings& _siblings) {
+    std::stack<ILayer<T>*> makeLayerStackWithUnvisited(const typename ml::ILayer<T>::LayerVector& layers) {
         std::stack<ILayer<T>*> sibStack;
-        auto it = _siblings.begin();
-        for (; it != _siblings.end(); ++it) {
+        auto it = layers.begin();
+        for (; it != layers.end(); ++it) {
             ILayer<T>* pSib = *it;
             if (pSib && !pSib->IsVisited() && !pSib->IsAboutToBeVisited()) {
                 sibStack.push(pSib);
@@ -541,14 +577,22 @@ namespace ml {
         return sibStack;
     }
 
+    template <class ItemType>
+    ItemType getNextItem(std::stack<ItemType> s) {
+        ItemType item = s.top(); 
+        s.pop();
+        return item;
+    }
+
+
     template <typename T>
     void Network<T>::train(const ml::Mat<T>& samples, const ml::Mat<T>& nominals) {
         ILayer<T>::resetAllIsVisited();
         for (int i = 0; i < samples.size().cy; ++i) {
             ml::Mat<T> row = ml::Mat<T>(samples.row(i), samples.size().cx);
             ml::Mat<T> predicted = feed(row);
-            ml::Mat<T> errors = ml::Diff(nominals, predicted);
-            backprop(errors);
+            getOutputLayer()->setErrors(ml::Diff(nominals, predicted));
+            backprop();
         }
     }
 
@@ -560,8 +604,33 @@ namespace ml {
     }
 
     template <typename T>
-    void Network<T>::backprop(const ml::Mat<T>& output_errors) {
-        /// TODO:..
+    void Network<T>::backprop() {
+        /* 
+        in a network:
+        for each dependancy:
+            propogate the errors to the depdenancy by weighting this layer's error
+        */
+        typedef std::stack<ILayer<T>*> Stack;
+        Stack toVisit;
+        toVisit.push(getOutputLayer());
+        do {
+            // propogate errors backwards from cur layer to it's dependancies
+            ILayer<T>* pCurLayer = getNextItem(toVisit);
+            ml::Mat<T> errors = pCurLayer->getErrors();
+            for(ILayer<T>* pPrevLayer : pCurLayer->dependancies) {
+                ml::Mat<T> weights = pPrevLayer->getWeights(pCurLayer);
+                weights.Transpose();
+                ml::Mat<T> deltaSig = SigGrad<T>(pPrevLayer->getInput());
+                ml::Mat<T> weightedErr = weights.Mult(errors);
+                ml::Mat<T> gradientErr = ml::ElementMult<T>(weightedErr, deltaSig);
+                pPrevLayer->setErrors(gradientErr);
+            }
+
+            // keep track of the layers to visit. also update current layer pointer
+            Stack unvisited = makeLayerStackWithUnvisited<T>(pCurLayer->dependancies); 
+            toVisit = joinStacks<ILayer<T>*>(toVisit, unvisited);
+            pCurLayer = getNextItem(toVisit);
+        } while(!toVisit.empty());
     }
 
     template <typename T>
@@ -578,7 +647,7 @@ namespace ml {
         pInputLayer->feed(input, epoch);
 
         std::stack<ILayer<T>*> nextStack;
-        std::stack<ILayer<T>*> sibStack = makeSiblingStackNotVisited<T>(pInputLayer->siblings);
+        std::stack<ILayer<T>*> sibStack = makeLayerStackWithUnvisited<T>(pInputLayer->siblings);
 
         // get ready for the next epoch of nodes to feed
         epoch++;
@@ -587,7 +656,7 @@ namespace ml {
             ILayer<T>* pSib = sibStack.top();
             sibStack.pop();
             nextStack = joinStacks<ILayer<T>*>(nextStack,
-                makeSiblingStackNotVisited<T>(pSib->siblings));
+                makeLayerStackWithUnvisited<T>(pSib->siblings));
             pSib->feed(ml::Mat<T>(), epoch);
             if (sibStack.empty()) {
                 sibStack = nextStack;
@@ -605,6 +674,12 @@ namespace ml {
     template <typename T>
     void Network<T>::activate(int nodeIdx, T in) {
 
+    }
+
+    template <typename T>
+    ml::Mat<T> Network<T>::getInput() {
+        if (!pInputLayer) return ml::Mat<T>();
+        return pInputLayer->getInput();
     }
 
     template <typename T>

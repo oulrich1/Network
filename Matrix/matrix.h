@@ -319,6 +319,7 @@ namespace ml {
 
     /* Mat<T> Specific operations */
 
+    /// element-wise sum m1 and m2 elements. the mats must be the same size
     template <typename T>
     ml::Mat<T> Sum(const ml::Mat<T>& m1, const ml::Mat<T>& m2) {
         typedef Mat<T> Mat;
@@ -332,6 +333,7 @@ namespace ml {
         return m3;
     }
 
+    /// sums elementwise each row, stores into a mat with one row (contains sum of rows)
     template <typename T>
     ml::Mat<T> SumRows(const ml::Mat<T>& mat) {
         if (mat.size() == ml::Size(0, 0))
@@ -351,6 +353,7 @@ namespace ml {
         return m3;
     }
 
+    // sumrows but with a bunch of mats
     template <typename T>
     ml::Mat<T> SumRows(const std::vector<ml::Mat<T>>& mats) {
         typedef Mat<T> Mat;
@@ -391,6 +394,7 @@ namespace ml {
         return m3;
     }
 
+    // m1 - m2 -> m3
     template <typename T>
     ml::Mat<T> Diff(const ml::Mat<T>& m1, const ml::Mat<T>& m2) {
         typedef Mat<T> Mat;
@@ -399,6 +403,32 @@ namespace ml {
         for (int i = 0; i < m1.size().cy; ++i) {
             for (int j = 0; j < m2.size().cx; ++j) {
                 m3.setAt(i, j, m1.getAt(i, j) - m2.getAt(i, j));
+            }
+        }
+        return m3;
+    }
+
+    // 1 - m1 -> m3
+    template <typename T>
+    ml::Mat<T> Diff(T val, const ml::Mat<T>& m1) {
+        typedef Mat<T> Mat;
+        Mat m3(m1.size(), 0);
+        for (int i = 0; i < m1.size().cy; ++i) {
+            for (int j = 0; j < m1.size().cx; ++j) {
+                m3.setAt(i, j, val - m1.getAt(i, j));
+            }
+        }
+        return m3;
+    }
+
+    // m1 - 1 -> m3
+    template <typename T>
+    ml::Mat<T> Diff(const ml::Mat<T>& m1, T val) {
+        typedef Mat<T> Mat;
+        Mat m3(m1.size(), 0);
+        for (int i = 0; i < m1.size().cy; ++i) {
+            for (int j = 0; j < m1.size().cx; ++j) {
+                m3.setAt(i, j, m1.getAt(i, j) - val);
             }
         }
         return m3;
@@ -429,6 +459,21 @@ namespace ml {
         }
         return res;
     }
+
+    // Element-wise multiply
+    template <typename T>
+    ml::Mat<T> ElementMult(const ml::Mat<T>& m1, const ml::Mat<T>& m2) {
+        assert(m1.size() == m2.size());
+        typedef ml::Mat<T> Mat;
+        Mat m3(m1.size(), 0);
+        for (int i = 0; i < m1.size().cy; ++i) {
+            for (int j = 0; j < m1.size().cx; ++j) {
+                m3.setAt(i, j, m1.getAt(i,j) + m2.getAt(i,j));
+            }
+        }
+        return m3; 
+    }
+
 
     /* determinant */
     template <typename T>
