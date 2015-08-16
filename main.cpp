@@ -108,30 +108,17 @@ void test_crazy_network_1() {
 
     // Defining network
     Network<T>* network = new Network<T>();
-    ILayer<T>* l1 = new Layer<T>(100);
-    ILayer<T>* l2 = new Layer<T>(200);
-    ILayer<T>* l3 = new Layer<T>(500);
+    ILayer<T>* l1 = new Layer<T>(100, "L1");
+    ILayer<T>* l2 = new Layer<T>(200, "L2");
+    ILayer<T>* l3 = new Layer<T>(500, "L3");
 
     // Defining subnet, middle node is actually l2. sorta recurrent
     Network<T>* aSubNet = new Network<T>();//.. = something else
-    {
-        ILayer<T>* s1 = new Layer<T>(100);
-        ILayer<T>* s3 = new Layer<T>(5000);
-        aSubNet->setInputLayer(s1);
-        aSubNet->connect(s1, l2);
-        aSubNet->connect(l2, s3);
-        aSubNet->setOutputLayer(s3);
-        aSubNet->setName("SubNet 1");
-    }
 
     // Defining rest of network
     ILayer<T>* l4 = aSubNet;
-    ILayer<T>* l5 = new Layer<T>(2);
-    l1->setName("L1");
-    l2->setName("L2");
-    l3->setName("L3");
-    l4->setName("L4");
-    l5->setName("L5");
+    ILayer<T>* l5 = new Layer<T>(2, "L5");
+    l4->setName("N4");
     network->setInputLayer(l1);
     network->connect(l1, l2);
     network->connect(l2, l3);
@@ -139,13 +126,28 @@ void test_crazy_network_1() {
     network->connect(l3, l2); // note: circularity back to l2
     network->connect(l4, l2); //       here again as well
     network->connect(l4, l5); // note: connecting subnet arbitrarily to another layer..
+
+    // Proper way to finish defining a subnet after completely defining which 
+    // network owns the recurrent layers (l2 is owned by parent network..)
+    {
+        ILayer<T>* s1 = new Layer<T>(100, "S1");
+        ILayer<T>* s3 = new Layer<T>(5000, "S3");
+        aSubNet->setInputLayer(s1);
+        aSubNet->connect(s1, l2);
+        aSubNet->connect(l2, s3);
+        aSubNet->setOutputLayer(s3);
+        aSubNet->setName("SubNet 1");
+    }
+
+    // Finish defining parent network and init.. feed.. train..
     network->setOutputLayer(l5);
     network->init();
     ml::Mat<T> input(1, 100, 1); // input vec must be the same size as the input layer's size
     network->feed(input);
 
     ml::Mat<T> samples(100, 100, 1);
-    network->train(samples);
+    ml::Mat<T> nominals(1, 100, 2); 
+    network->train(samples, nominals);
 
     timer.stop();
     cout << timer.getTime() << endl;

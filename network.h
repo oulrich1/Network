@@ -131,9 +131,10 @@ namespace ml {
         std::map<ILayer<T>*, ml::Mat<T>> weights;
 
         void AddToLayersMap(ILayer<T>* layer);
-        // gaurentees destruction uniqueness.. so only deletes once
-        // keeps track of all layers ever. So that we can free them all
-        // and yet still be able to reuse Layers.. in the network..
+        void resetAllIsVisited();
+        /// Keep track of all layers ever connected to a network.. If it is in here then it 
+        /// is owned by some network.  If it is not here then it was never added to a network. 
+        /// Layers in here will be deleted..
         static std::map<ILayer<T>*, ILayer<T>*> mLayersMap;
 
     public:
@@ -147,8 +148,8 @@ namespace ml {
         /// (0) We get input fed to us + input from dependancies
         // inputs
 
-        /// (1) we can hold a temporary sum of the inputs in the mActivated var
-        // These can be got from each ILayer to weigh as input into sibling ILayers
+        /// (1) the activated inputs into this layer. Will be weighted and sent as 
+        /// output to next layers. Could be considered "output" from a network
         ml::Mat<T> mActivated;
 
         /// (2) then we have weighted activations from the current ILayer
@@ -158,6 +159,17 @@ namespace ml {
     private:
         std::string mName;
     };
+
+    template <typename T>
+    void ILayer<T>::resetAllIsVisited() {
+        cout << getName() << ": " << "reseting is visited for all INodes" << endl;
+        for (auto it : mLayersMap) {
+            if (it.second) {
+                it.second->SetVisited(false);
+                it.second->SetAboutToBeVisited(false);
+            }
+        }
+    }
 
     template <typename T>
     ml::Mat<T> ILayer<T>::getOutputByID(ILayer<T>* pID) {
@@ -172,6 +184,7 @@ namespace ml {
         this->mOutputs[pID] = output;
     }
 
+    /// Static Map
     template <typename T>
     std::map<ILayer<T>*, ILayer<T>*> ILayer<T>::mLayersMap = std::map<ILayer<T>*, ILayer<T>*>();
 
@@ -211,7 +224,7 @@ namespace ml {
     }
 
 
-    /* Shoudl get called upon construction of an ILayer.. */
+    /* Should get called upon construction of an ILayer.. */
     template <typename T>
     void ILayer<T>::AddToLayersMap(ILayer<T>* layer) {
         this->mLayersMap[layer] = layer;
@@ -293,7 +306,7 @@ namespace ml {
 
     template <typename T>
     void Layer<T>::common_construct() {
-        this->AddToLayersMap(this);
+        //this->AddToLayersMap(this);
     }
 
     template <typename T>
@@ -321,14 +334,15 @@ namespace ml {
 		for (int i = 0; i < GetNumBiasNodes(); ++i)
 			pushBiasCol<T>(inputMat);
 
-        // perform weight and activation
-        this->mActivated = inputMat.Copy(); // todo: activate these with sigmoid or gaussian
+        // Activate the input 
+        /// todo: activate these with sigmoid or gaussian
+        this->mActivated = inputMat.Copy(); 
+
+        // weight the activated node values and provide weighted sums to next layer's nodes
         for (auto sib : this->siblings) {
             auto weightIt = this->weights.find(sib);
-			// weight the inputMat from this layer to the sibling layer
             if (weightIt != this->weights.end()) {
-                // expect row vec (or num cols == num nodes in sibling layer), true for "Is param 2 transposed already"
-                this->mOutputs[sib] = ml::Mult<T>(inputMat, weightIt->second, true);
+                this->setOutputByID(sib, ml::Mult<T>(inputMat, weightIt->second, true));
                 assert(sib->getInputSize() == this->mOutputs[sib].size().cx);
             }
         }
@@ -353,8 +367,6 @@ namespace ml {
     void Layer<T>::setActivatedInput(ml::Mat<T> activatedInput) {
         this->mActivated = activatedInput;
     }
-
-
 
 
     /*  - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -383,7 +395,7 @@ namespace ml {
 
 
     public:
-        virtual void        train(const ml::Mat<T>& samples);
+        virtual void        train(const ml::Mat<T>& samples, const ml::Mat<T>& nominals);
         virtual ml::Mat<T>  feed(const ml::Mat<T>& in);
         virtual void        backprop(const ml::Mat<T>& output_errors);
         virtual ml::Mat<T>  getOutput();
@@ -409,11 +421,17 @@ namespace ml {
 		virtual size_t getOutputSize() const override;
 		virtual size_t getInputSize() const override;
 
+    public:
+        virtual ml::Mat<T> getOutputByID(ILayer<T>* pID);
+
     protected:
         void common_construct();
 
     protected:
-        void reset_isvisited();
+        void updateLayersMaps(ILayer<T>* layer);        // updates both global map and instance map
+        void AddToNetworkLayersMap(ILayer<T>* layer);   // adds to instance map ref to layer to own
+        void resetNetworkIsVisited();                   // resets this' own layers' visited flags..
+        std::map<ILayer<T>*, ILayer<T>*> mNetworkLayersMap; // local to instance, vs global to all layers see: mLayersMap
 
     private:
         ILayer<T>* pInputLayer;
@@ -434,7 +452,7 @@ namespace ml {
 
     template <typename T>
     void Network<T>::common_construct() {
-        ILayer<T>::AddToLayersMap(this);
+        //ILayer<T>::AddToLayersMap(this);
         pInputLayer = NULL;
         pOutputLayer = NULL;
     }
@@ -459,7 +477,7 @@ namespace ml {
 
     template <typename T>
     void Network<T>::init() {
-        reset_isvisited();
+        resetNetworkIsVisited();
         this->SetVisited(true);
         assert(pInputLayer);
         cout << ILayer<T>::getName() << ": " << "initializing the inner layers' connections" << endl;
@@ -470,9 +488,9 @@ namespace ml {
 
     // call before init and before we need the state to be reset
     template <typename T>
-    void Network<T>::reset_isvisited() {
-        cout << ILayer<T>::getName() << ": " << "reseting is visited for all INodes" << endl;
-        for (auto it : ILayer<T>::mLayersMap) {
+    void Network<T>::resetNetworkIsVisited() {
+        cout << ILayer<T>::getName() << ": " << "reseting is visited for this network's INodes" << endl;
+        for (auto it : this->mNetworkLayersMap) {
             if (it.second) {
                 it.second->SetVisited(false);
                 it.second->SetAboutToBeVisited(false);
@@ -480,6 +498,10 @@ namespace ml {
         }
     }
 
+    template <typename T>
+    void Network<T>::AddToNetworkLayersMap(ILayer<T>* layer) {
+        this->mNetworkLayersMap[layer] = layer;
+    }
 
     template <typename T>
     std::stack<ILayer<T>*> makeSiblingStack(const typename ml::ILayer<T>::Siblings& _siblings) {
@@ -507,20 +529,19 @@ namespace ml {
     }
 
     template <typename T>
-    void Network<T>::train(const ml::Mat<T>& samples) {
+    void Network<T>::train(const ml::Mat<T>& samples, const ml::Mat<T>& nominals) {
         for (int i = 0; i < samples.size().cy; ++i) {
             ml::Mat<T> row = ml::Mat<T>(samples.row(i), samples.size().cx);
-            feed(row);
-            ml::Mat<T> errors;
+            ml::Mat<T> predicted = feed(row);
+            ml::Mat<T> errors = ml::Diff(nominals, predicted);
             backprop(errors);
         }
     }
 
     template <typename T>
     ml::Mat<T> Network<T>::feed(const ml::Mat<T>& in)  {
-        reset_isvisited();
         this->feed(in, 0);
-        return this->getOutputByID(this);
+        return this->getOutput();
     }
 
     template <typename T>
@@ -530,6 +551,7 @@ namespace ml {
 
     template <typename T>
     void Network<T>::feed(ml::Mat<T> in, int epoch) {
+        resetNetworkIsVisited();
         assert(pInputLayer && pOutputLayer);
         this->SetVisited(true);
         this->setEpoch(epoch);
@@ -628,6 +650,12 @@ namespace ml {
 
 	/// End sizing
 
+    template <typename T>
+    ml::Mat<T> Network<T>::getOutputByID(ILayer<T>* pID) {
+        ILayer<T>* pLayer = getOutputLayer();
+        return pLayer ? pLayer->getOutputByID(pLayer) : ml::Mat<T>();
+    }
+
 	
     template <typename T>
     ml::Mat<T> Network<T>::getOutput() {
@@ -635,9 +663,25 @@ namespace ml {
     }
 
     template <typename T>
+    void Network<T>::updateLayersMaps(ILayer<T>* layer) {
+        // keep track of the layers added to this network, if added to this before another 
+        // network then the other network will not have the layer in it's network layers map.. 
+        // however the mLayersMap will still have all layers. If the layers map has it then a 
+        // network has already claimed the layer as its own.
+        if (ILayer<T>::mLayersMap.find(layer) == ILayer<T>::mLayersMap.end()) {
+            if (this->mNetworkLayersMap.find(layer) == this->mNetworkLayersMap.end()) {
+                AddToNetworkLayersMap(layer);
+            }
+            ILayer<T>::AddToLayersMap(layer);
+        }
+    }
+
+    template <typename T>
     void Network<T>::connect(ILayer<T>* l1, ILayer<T>* l2) {
         assert(l1 && l2);
         l1->connect(l2);
+        updateLayersMaps(l1);
+        updateLayersMaps(l2);
     }
 
 } // namespace ml
