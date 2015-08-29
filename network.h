@@ -79,7 +79,6 @@ namespace ml {
     class ILayer : public INode<T> {
     public:
         typedef ml::Mat<T> Mat;
-        typedef std::function<T(T)> Sigmoid;
         typedef std::vector<ILayer<T>*> LayerVector;
 
     public:
@@ -591,8 +590,8 @@ namespace ml {
         for (int i = 0; i < samples.size().cy; ++i) {
             ml::Mat<T> row = ml::Mat<T>(samples.row(i), samples.size().cx);
             ml::Mat<T> predicted = feed(row);
-            getOutputLayer()->setErrors(ml::Diff(nominals, predicted));
-            backprop();
+            //getOutputLayer()->setErrors(ml::Diff(nominals, predicted));
+            //backprop();
         }
     }
 
