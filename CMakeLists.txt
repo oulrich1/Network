@@ -150,3 +150,11 @@ set (DEBUG_WEIGHTS_TEST_TARGET_NAME "test_debug_weights")
 set (DEBUG_WEIGHTS_TEST_SOURCE_FILES "test_debug_weights.cpp")
 add_executable(${DEBUG_WEIGHTS_TEST_TARGET_NAME} ${DEBUG_WEIGHTS_TEST_SOURCE_FILES})
 target_link_libraries(${DEBUG_WEIGHTS_TEST_TARGET_NAME} ${EXTRA_LIBS})
+
+# # # # COMPREHENSIVE UNIT TESTS # # #
+
+set (COMPREHENSIVE_TEST_TARGET_NAME "test_comprehensive")
+set (COMPREHENSIVE_TEST_SOURCE_FILES "test_comprehensive.cpp")
+add_executable(${COMPREHENSIVE_TEST_TARGET_NAME} ${COMPREHENSIVE_TEST_SOURCE_FILES})
+target_link_libraries(${COMPREHENSIVE_TEST_TARGET_NAME} ${EXTRA_LIBS})
+add_test(NAME ComprehensiveTests COMMAND test_comprehensive)

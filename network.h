@@ -391,25 +391,26 @@ namespace ml {
         this->SetVisited(true);
         this->setEpoch(epoch);
 
-        // TODO: update this so it works correctly
+        // Get input (weighted sum from previous layer)
         ml::Mat<T> inputMat = this->getInputFromDependancyOutputs(_in);
         if (!inputMat.IsGood())
             return;
 
-        // Activate the input
-        /// Activate with sigmoid activation function
+        // Store the raw input and compute activation
         this->mInput     = inputMat.Copy();
         this->mActivated = Sigmoid<T>(this->mInput);
 
-        // Add bias units:
+        // CRITICAL FIX: Add bias to the ACTIVATED values, not the pre-activation values
+        // Create a copy of activated values with bias for forward propagation
+        ml::Mat<T> activatedWithBias = this->mActivated.Copy();
         for (int i = 0; i < this->GetNumBiasNodes(); ++i)
-            pushBiasCol<T>(inputMat);
+            pushBiasCol<T>(activatedWithBias);
 
-        // weight the activated node values and provide weighted sums to next layer's nodes
+        // Weight the activated node values and provide weighted sums to next layer's nodes
         for (auto sib : this->siblings) {
             auto weightIt = this->weights.find(sib);
             if (weightIt != this->weights.end()) {
-                this->setOutputByID(sib, ml::Mult<T>(inputMat, weightIt->second, true));
+                this->setOutputByID(sib, ml::Mult<T>(activatedWithBias, weightIt->second, true));
                 assert(sib->getInputSize() == this->mOutputs[sib].size().cx);
             }
         }
