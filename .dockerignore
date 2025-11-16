@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+*.o
+*.a
+
+# Git
+.git/
+.github/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Documentation
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Misc
+AGENTS.md
