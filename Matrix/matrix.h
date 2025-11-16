@@ -487,24 +487,4 @@ namespace ml {
 }
 
 
-/// TODO move out into another file
-namespace ml {
-    template <typename T>
-    ml::Mat<T> initWeightsNormalDist(int rows, int cols, T mean=0.001f, T stddev=0.0001f) {
-        ml::Mat<T> weights(rows, cols, 0);
-		if (stddev == 0)
-			return weights;
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::normal_distribution<> d(mean, stddev);
-
-        for (int i = 0; i < weights.size().cy; ++i) {
-            for (int j = 0; j < weights.size().cx; ++j) {
-                // Fixed: removed std::round() to allow fractional weights
-                weights.setAt(i, j, static_cast<T>(d(gen)));
-            }
-        }
-
-        return weights;
-    }
-}
+// Weight initialization moved to network.h where it belongs

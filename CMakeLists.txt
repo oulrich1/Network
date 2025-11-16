@@ -143,3 +143,10 @@ set (XOR_MIN_TEST_TARGET_NAME "test_xor_minimal")
 set (XOR_MIN_TEST_SOURCE_FILES "test_xor_minimal.cpp")
 add_executable(${XOR_MIN_TEST_TARGET_NAME} ${XOR_MIN_TEST_SOURCE_FILES})
 target_link_libraries(${XOR_MIN_TEST_TARGET_NAME} ${EXTRA_LIBS})
+
+# # # # DEBUG WEIGHTS TEST # # #
+
+set (DEBUG_WEIGHTS_TEST_TARGET_NAME "test_debug_weights")
+set (DEBUG_WEIGHTS_TEST_SOURCE_FILES "test_debug_weights.cpp")
+add_executable(${DEBUG_WEIGHTS_TEST_TARGET_NAME} ${DEBUG_WEIGHTS_TEST_SOURCE_FILES})
+target_link_libraries(${DEBUG_WEIGHTS_TEST_TARGET_NAME} ${EXTRA_LIBS})

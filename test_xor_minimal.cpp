@@ -37,10 +37,10 @@ int main() {
     cout << "[1,0] -> " << net->feed(x3).getAt(0, 0) << " (expect 1)" << endl;
     cout << "[1,1] -> " << net->feed(x4).getAt(0, 0) << " (expect 0)" << endl;
 
-    T lr = 0.5;
+    T lr = 0.1;  // Reduced from 0.5 for stability
     cout << "\nTraining..." << endl;
 
-    for (int epoch = 0; epoch < 1000; ++epoch) {
+    for (int epoch = 0; epoch < 5000; ++epoch) {
         T totalErr = 0;
 
         // Sample 1

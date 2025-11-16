@@ -17,6 +17,28 @@ using namespace std;
 
 
 namespace ml {
+    // Neural network helper functions
+
+    // Initialize weight matrix with values from normal distribution
+    template <typename T>
+    ml::Mat<T> initWeightsNormalDist(int rows, int cols, T mean = 0.0, T stddev = 0.01) {
+        ml::Mat<T> weights(rows, cols, 0);
+        if (stddev == 0)
+            return weights;
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::normal_distribution<T> dist(mean, stddev);
+
+        for (int i = 0; i < weights.size().cy; ++i) {
+            for (int j = 0; j < weights.size().cx; ++j) {
+                weights.setAt(i, j, dist(gen));
+            }
+        }
+
+        return weights;
+    }
+
     template <typename T>
     T* makeBias(size_t els, T val) {
         if (els == 0) return NULL;
@@ -652,13 +674,21 @@ namespace ml {
                 ml::Mat<T> weights = pPrevLayer->getWeights(pCurLayer);
                 if (!weights.IsGood()) continue;
 
-                weights.Transpose();
                 ml::Mat<T> activatedInput = pPrevLayer->getActivatedInput();
                 if (!activatedInput.IsGood()) continue;
 
+                // Transpose error from row vector (1, m) to column vector (m, 1) for backprop
+                ml::Mat<T> errorCol = errors.Copy();
+                errorCol.Transpose();  // Now (m, 1)
+
+                // Transpose weights: (m, n+bias) -> (n+bias, m)
+                ml::Mat<T> weightsT = weights.Copy();
+                weightsT.Transpose();
+
+                // Compute weighted error: W^T * error = (n+bias, m) * (m, 1) = (n+bias, 1)
+                ml::Mat<T> weightedErr = ml::Mult<T>(weightsT, errorCol, true);
+
                 ml::Mat<T> deltaSig = SigGrad<T>(activatedInput);
-                // Use standalone Mult with bIsTransposedAlready=true since errors is already a column vector
-                ml::Mat<T> weightedErr = ml::Mult<T>(weights, errors, true);
 
                 // Strip bias rows from weighted errors to match dimensions of deltaSig
                 // weightedErr is a column vector (cx=1, cy=outputSize) which includes bias
@@ -730,16 +760,23 @@ namespace ml {
                 for (int b = 0; b < ILayer<T>::GetNumBiasNodes(); ++b)
                     pushBiasCol<T>(activatedWithBias);
 
-                // Compute weight update: delta_W = learningRate * error^T * activation
-                // errors is (1, m), activatedWithBias is (1, n+bias)
+                // Compute weight update: delta_W = error^T * activation (outer product)
+                // errors is (1, m) row vector, activatedWithBias is (1, n+bias) row vector
                 // weights are (m, n+bias)
-                // Update: W_new = W_old + learningRate * error^T * activation
+                // Result: delta_W (m, n+bias) where delta_W[i,j] = error[i] * activation[j]
 
-                ml::Mat<T> errorTransposed = errors.Copy();
-                errorTransposed.Transpose();  // (m, 1)
+                // Manual outer product since Mult() doesn't handle this case properly
+                ml::Mat<T> weightDelta(weights.size(), 0);
+                int numOutputs = errors.size().cx;  // m
+                int numInputs = activatedWithBias.size().cx;  // n+bias
 
-                // Compute outer product: (m, 1) * (1, n+bias) = (m, n+bias)
-                ml::Mat<T> weightDelta = ml::Mult<T>(errorTransposed, activatedWithBias, true);
+                for (int i = 0; i < numOutputs; ++i) {
+                    T err = errors.getAt(0, i);
+                    for (int j = 0; j < numInputs; ++j) {
+                        T act = activatedWithBias.getAt(0, j);
+                        weightDelta.setAt(i, j, err * act);
+                    }
+                }
 
                 // Create updated weights matrix
                 ml::Mat<T> updatedWeights = weights.Copy();

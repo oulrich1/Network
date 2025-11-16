@@ -80,8 +80,8 @@ void test_xor_training() {
     expected.push_back(exp4);
 
     // Training parameters
-    const int epochs = 2000;
-    const T learningRate = 0.5;
+    const int epochs = 10000;
+    const T learningRate = 0.1;  // Reduced for stability
 
     cout << ">> Training for " << epochs << " epochs with learning rate " << learningRate << endl;
 
