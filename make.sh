@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/bin/bash
 echo "This will ./build and then 'make' the project.."
 sleep 0.5
 
