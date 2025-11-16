@@ -17,9 +17,10 @@ file (GLOB MATRIX_INCLUDE_FILES
 # add library
 add_library(Matrix STATIC ${MATRIX_SOURCE_FILES})
 
-# Link OpenMP to Matrix library
-find_package(OpenMP REQUIRED)
-if(OpenMP_CXX_FOUND)
+# Link OpenMP to Matrix library (optional)
+find_package(OpenMP)
+if(OpenMP_FOUND AND OpenMP_CXX_FOUND)
+    target_compile_definitions(Matrix PRIVATE HAVE_OPENMP)
     target_link_libraries(Matrix PUBLIC OpenMP::OpenMP_CXX)
 endif()
 

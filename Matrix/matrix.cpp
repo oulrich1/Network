@@ -19,7 +19,9 @@
 #include "../math/rect.h"
 #include "matrix.h"
 
+#ifdef HAVE_OPENMP
 #include <omp.h>
+#endif
 
 #ifndef NULL
 #define NULL 0

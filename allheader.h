@@ -24,7 +24,9 @@
 #endif
 
 // openmp
+#ifdef HAVE_OPENMP
 #include <omp.h>
+#endif
 
 // client includes
 #include "utility.h"
