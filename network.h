@@ -2,6 +2,7 @@
 
 #include <stack>
 #include <vector>
+#include <set>
 #include <algorithm>
 #include "math/rect.h"
 #include "Matrix/matrix.h"
@@ -37,7 +38,14 @@ namespace ml {
 
     template <typename T>
     ml::Mat<T> Sigmoid(ml::Mat<T> mat) {
-        return mat.Copy(); // TODO: implement as a sigmoid
+        ml::Mat<T> result(mat.size(), 0);
+        for (int i = 0; i < mat.size().cy; ++i) {
+            for (int j = 0; j < mat.size().cx; ++j) {
+                T val = mat.getAt(i, j);
+                result.setAt(i, j, 1.0 / (1.0 + std::exp(-val)));
+            }
+        }
+        return result;
     }
 
     template <typename T>
@@ -357,11 +365,10 @@ namespace ml {
         if (!inputMat.IsGood())
             return;
 
-        // Activate the input 
-        /// todo: activate these with sigmoid or gaussian
-        //setActivatedInput(inputMat.Copy());
+        // Activate the input
+        /// Activate with sigmoid activation function
         this->mInput     = inputMat.Copy();
-        this->mActivated = Sigmoid<T>(this->mActivated);
+        this->mActivated = Sigmoid<T>(this->mInput);
 
         // Add bias units:
         for (int i = 0; i < this->GetNumBiasNodes(); ++i)
@@ -604,32 +611,68 @@ namespace ml {
 
     template <typename T>
     void Network<T>::backprop() {
-        /* 
-        in a network:
-        for each dependancy:
-            propogate the errors to the depdenancy by weighting this layer's error
+        /*
+        Simple backpropagation through the network:
+        For each layer (starting from output), propagate errors backward to dependencies
         */
-        typedef std::stack<ILayer<T>*> Stack;
-        Stack toVisit;
-        toVisit.push(getOutputLayer());
-        do {
-            // propogate errors backwards from cur layer to it's dependancies
-            ILayer<T>* pCurLayer = getNextItem(toVisit);
-            ml::Mat<T> errors = pCurLayer->getErrors();
-            for(ILayer<T>* pPrevLayer : pCurLayer->dependancies) {
-                ml::Mat<T> weights = pPrevLayer->getWeights(pCurLayer);
-                weights.Transpose();
-                ml::Mat<T> deltaSig = SigGrad<T>(pPrevLayer->getInput());
-                ml::Mat<T> weightedErr = weights.Mult(errors);
-                ml::Mat<T> gradientErr = ml::ElementMult<T>(weightedErr, deltaSig);
-                pPrevLayer->setErrors(gradientErr);
-            }
+        ILayer<T>* pOutputLayer = getOutputLayer();
+        if (!pOutputLayer) return;
 
-            // keep track of the layers to visit. also update current layer pointer
-            Stack unvisited = makeLayerStackWithUnvisited<T>(pCurLayer->dependancies); 
-            toVisit = joinStacks<ILayer<T>*>(toVisit, unvisited);
-            pCurLayer = getNextItem(toVisit);
-        } while(!toVisit.empty());
+        // Use a simple vector to collect layers to process, avoid complex stack manipulation
+        std::vector<ILayer<T>*> toProcess;
+        std::set<ILayer<T>*> visited;
+
+        // Start with output layer
+        toProcess.push_back(pOutputLayer);
+        visited.insert(pOutputLayer);
+
+        // Process layers in order
+        for (size_t i = 0; i < toProcess.size(); ++i) {
+            ILayer<T>* pCurLayer = toProcess[i];
+            if (!pCurLayer) continue;
+
+            ml::Mat<T> errors = pCurLayer->getErrors();
+            if (!errors.IsGood()) continue;
+
+            // Propagate errors to each dependency (previous layer)
+            for(ILayer<T>* pPrevLayer : pCurLayer->dependancies) {
+                if (!pPrevLayer) continue;
+
+                ml::Mat<T> weights = pPrevLayer->getWeights(pCurLayer);
+                if (!weights.IsGood()) continue;
+
+                weights.Transpose();
+                ml::Mat<T> activatedInput = pPrevLayer->getActivatedInput();
+                if (!activatedInput.IsGood()) continue;
+
+                ml::Mat<T> deltaSig = SigGrad<T>(activatedInput);
+                // Use standalone Mult with bIsTransposedAlready=true since errors is already a column vector
+                ml::Mat<T> weightedErr = ml::Mult<T>(weights, errors, true);
+
+                // Strip bias rows from weighted errors to match dimensions of deltaSig
+                // weightedErr is a column vector (cx=1, cy=outputSize) which includes bias
+                // deltaSig is a row vector (cx=inputSize, cy=1) which doesn't include bias
+                // We need to remove the last row(s) corresponding to bias units
+                size_t numNonBiasNodes = pPrevLayer->getInputSize();
+                if (numNonBiasNodes > weightedErr.size().cy) continue;
+
+                // Create a row vector (matching deltaSig orientation)
+                // Mat constructor is (height, width), so (1, numNonBiasNodes) = 1 row, N columns
+                ml::Mat<T> weightedErrNoBias(1, numNonBiasNodes, 0);
+                for (size_t j = 0; j < numNonBiasNodes; ++j) {
+                    weightedErrNoBias.setAt(0, j, weightedErr.getAt(j, 0));
+                }
+
+                ml::Mat<T> gradientErr = ml::ElementMult<T>(weightedErrNoBias, deltaSig);
+                pPrevLayer->setErrors(gradientErr);
+
+                // Add this layer to the processing queue if not already visited
+                if (visited.find(pPrevLayer) == visited.end()) {
+                    toProcess.push_back(pPrevLayer);
+                    visited.insert(pPrevLayer);
+                }
+            }
+        }
     }
 
     template <typename T>

@@ -2,8 +2,9 @@ cmake_minimum_required (VERSION 3.2)
 project (NeuralNet)
 
 # set compiler flags
-set(CMAKE_CXX_COMPILER g++-5)
-set(CMAKE_C_COMPILER gcc-5)
+# Use system default compilers instead of g++-5/gcc-5
+# set(CMAKE_CXX_COMPILER g++)
+# set(CMAKE_C_COMPILER gcc)
 
 set(CXX_COMMON_FLAGS "" CACHE STRING "")
 set(CMAKE_CXX_FLAGS "${CXX_COMMON_FLAGS}")
@@ -104,3 +105,11 @@ add_custom_target(
   RunTests ALL
   DEPENDS test_.lic
 )
+
+# # # # NEURAL NETWORK UNIT TESTS # # #
+
+set (NN_TESTS_TARGET_NAME "test_network")
+set (NN_TESTS_SOURCE_FILES "test_network.cpp")
+add_executable(${NN_TESTS_TARGET_NAME} ${NN_TESTS_SOURCE_FILES})
+target_link_libraries(${NN_TESTS_TARGET_NAME} ${EXTRA_LIBS})
+add_test(NAME NeuralNetworkTests COMMAND test_network)
