@@ -4,7 +4,9 @@
 #define uint unsigned int
 #endif
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <xmmintrin.h>
+#endif
 
 template <typename Vec>
 void copy(Vec& src, Vec& dst) {
@@ -30,6 +32,7 @@ T dot(const T* v1, const T* v2, const size_t size) {
 }
 
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 inline __m128 sse_dot4(__m128 v0, __m128 v1) {
     v0 = _mm_mul_ps(v0, v1);
     v1 = _mm_shuffle_ps(v0, v0, _MM_SHUFFLE(2, 3, 0, 1));
@@ -68,6 +71,7 @@ Vec make_mm_vec(typename Vec::value_type val, size_t size){
   return v;
 }
 #endif
+#endif // x86/x64 architecture check
 
 //
 

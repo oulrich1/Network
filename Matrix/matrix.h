@@ -483,7 +483,7 @@ namespace ml {
     // from the x_iter and y_iter column and row
     // (where the scaler exists)
     template <typename T>
-    Mat<T> findM(const Mat<T>& A, int i, int j, int SIZE);
+    Mat<T> findM(const Mat<T>& A, int i, int j, Size size);
 }
 
 

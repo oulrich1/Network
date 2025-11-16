@@ -104,6 +104,10 @@ Mat<double> grad = SigGrad(activated);
 - OpenMP (optional, for parallel operations)
 - GCC/Clang with C++ support
 
+### Platform Support
+
+The library supports both x86/x64 and ARM architectures (including Apple Silicon). SSE optimizations are automatically disabled on non-x86 platforms. The build system will automatically configure the appropriate settings for your platform.
+
 ## Contributing
 
 Contributions are welcome! Please ensure:

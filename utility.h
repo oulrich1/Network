@@ -177,7 +177,7 @@ namespace StackEx {
 
 #define DEFINE_SIBLING_MAP(CLASS, T)  \
 	template <>				\
-	std::map<CLASS##<##T##>*, CLASS##<##T##>*> CLASS##<##T##>::mLayersMap = std::map<CLASS##<##T##>*, CLASS##<##T##>*>();
+	std::map<CLASS<T>*, CLASS<T>*> CLASS<T>::mLayersMap = std::map<CLASS<T>*, CLASS<T>*>();
 
 
 

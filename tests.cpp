@@ -11,6 +11,7 @@ void test_nn_math() {
     float t = 0;      // time
     float result = 0; // common float result
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
     __m128 Special = _mm_set1_ps(2);
     __m128 Identity = _mm_set1_ps(1.);
 
@@ -18,12 +19,14 @@ void test_nn_math() {
     _mm_store_ss(&result, res);
 
     std::cout << result << std::endl;
+#endif
 
     std::vector<float> v1 = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
     t = TIME_ASSIGN(result, dot<float>(v1, v1));
 
     std::cout << result << " in time: " << t << std::endl;
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
     __m128 res128;
     typedef std::vector<__m128> vec_mm;
     vec_mm v = make_mm_vec<vec_mm>(_mm_set1_ps(1), 7);
@@ -31,6 +34,9 @@ void test_nn_math() {
 
     _mm_store_ss(&result, res128);
     std::cout << result << " in time: " << t << std::endl;
+#else
+    std::cout << "SSE tests skipped on non-x86 architecture" << std::endl;
+#endif
     std::cout << std::endl << ">> Done with 'Timer' testing." << std::endl;
     std::cout << std::endl;
 }
