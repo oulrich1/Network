@@ -121,3 +121,25 @@ set (NN_TESTS_SOURCE_FILES "test_network.cpp")
 add_executable(${NN_TESTS_TARGET_NAME} ${NN_TESTS_SOURCE_FILES})
 target_link_libraries(${NN_TESTS_TARGET_NAME} ${EXTRA_LIBS})
 add_test(NAME NeuralNetworkTests COMMAND test_network)
+
+# # # # NEURAL NETWORK TRAINING TESTS # # #
+
+set (NN_TRAINING_TESTS_TARGET_NAME "test_training")
+set (NN_TRAINING_TESTS_SOURCE_FILES "test_training.cpp")
+add_executable(${NN_TRAINING_TESTS_TARGET_NAME} ${NN_TRAINING_TESTS_SOURCE_FILES})
+target_link_libraries(${NN_TRAINING_TESTS_TARGET_NAME} ${EXTRA_LIBS})
+add_test(NAME NeuralNetworkTrainingTests COMMAND test_training)
+
+# # # # SIMPLE DEBUG TEST # # #
+
+set (SIMPLE_TEST_TARGET_NAME "test_simple")
+set (SIMPLE_TEST_SOURCE_FILES "test_simple.cpp")
+add_executable(${SIMPLE_TEST_TARGET_NAME} ${SIMPLE_TEST_SOURCE_FILES})
+target_link_libraries(${SIMPLE_TEST_TARGET_NAME} ${EXTRA_LIBS})
+
+# # # # XOR MINIMAL TEST # # #
+
+set (XOR_MIN_TEST_TARGET_NAME "test_xor_minimal")
+set (XOR_MIN_TEST_SOURCE_FILES "test_xor_minimal.cpp")
+add_executable(${XOR_MIN_TEST_TARGET_NAME} ${XOR_MIN_TEST_SOURCE_FILES})
+target_link_libraries(${XOR_MIN_TEST_TARGET_NAME} ${EXTRA_LIBS})

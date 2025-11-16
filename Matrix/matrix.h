@@ -500,7 +500,8 @@ namespace ml {
 
         for (int i = 0; i < weights.size().cy; ++i) {
             for (int j = 0; j < weights.size().cx; ++j) {
-                weights.setAt(i, j, std::round(d(gen)));
+                // Fixed: removed std::round() to allow fractional weights
+                weights.setAt(i, j, static_cast<T>(d(gen)));
             }
         }
 

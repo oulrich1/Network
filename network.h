@@ -142,6 +142,7 @@ namespace ml {
 
         // returns the weights that weigh the output from this layer to the next layer
         virtual ml::Mat<T> getWeights(ILayer<T>* pNextLayer);
+        virtual void setWeights(ILayer<T>* pNextLayer, const ml::Mat<T>& newWeights);
 
     protected:
         size_t mNumInputNodes;  // the num inputs into this layer
@@ -189,7 +190,8 @@ namespace ml {
 
     template <typename T>
     void ILayer<T>::resetAllIsVisited() {
-        cout << getName() << ": " << "reseting is visited for all INodes" << endl;
+        // Reduced logging for performance
+        // cout << getName() << ": " << "reseting is visited for all INodes" << endl;
         for (auto it : mLayersMap) {
             if (it.second) {
                 it.second->SetVisited(false);
@@ -244,7 +246,9 @@ namespace ml {
     void ILayer<T>::initWeights(ILayer<T>* pSib) {
         const int numInputPerNode = this->getOutputSize();  // num input to each node in next layer
         const int numNodesNextLayer = pSib->getInputSize();   // num nodes in next layer
-        const T mean = 0.1, stddev = 0.01;
+        // Use Xavier/Glorot initialization: stddev = sqrt(2 / (n_in + n_out))
+        const T mean = 0.0;
+        const T stddev = std::sqrt(2.0 / (numInputPerNode + numNodesNextLayer));
         // Note: the weights are initialized such that each row is the weight cooeficients for the input into the sibling
         // the sibling has "numNodesNextLayer" therefore, it is clear that there are that many weights. One per next node.
         this->weights[pSib] = ml::initWeightsNormalDist<T>(numNodesNextLayer, numInputPerNode, mean, stddev);
@@ -256,6 +260,11 @@ namespace ml {
         if(it != weights.end())
             return it->second;
         return ml::Mat<T>();
+    }
+
+    template <typename T>
+    void ILayer<T>::setWeights(ILayer<T>* pNextLayer, const ml::Mat<T>& newWeights) {
+        weights[pNextLayer] = newWeights;
     }
 
     /* Should get called upon construction of an ILayer.. */
@@ -440,6 +449,7 @@ namespace ml {
         virtual void        train(const ml::Mat<T>& samples, const ml::Mat<T>& nominals);
         virtual ml::Mat<T>  feed(const ml::Mat<T>& in);
         virtual void        backprop();
+        virtual void        updateWeights(T learningRate);
         virtual ml::Mat<T>  getOutput();
         virtual void        connect(ILayer<T>* l1, ILayer<T>* l2);
         virtual void        connect(ILayer<T>* nextLayer);
@@ -544,7 +554,8 @@ namespace ml {
     // call before init and before we need the state to be reset
     template <typename T>
     void Network<T>::resetNetworkIsVisited() {
-        cout << ILayer<T>::getName() << ": " << "reseting is visited for this network's INodes" << endl;
+        // Reduced logging for performance
+        // cout << ILayer<T>::getName() << ": " << "reseting is visited for this network's INodes" << endl;
         for (auto it : this->mNetworkLayersMap) {
             if (it.second) {
                 it.second->SetVisited(false);
@@ -671,6 +682,81 @@ namespace ml {
                     toProcess.push_back(pPrevLayer);
                     visited.insert(pPrevLayer);
                 }
+            }
+        }
+    }
+
+    template <typename T>
+    void Network<T>::updateWeights(T learningRate) {
+        /*
+        Update weights using gradient descent:
+        For each layer, compute weight gradients from activations and errors,
+        then update weights: W = W + learningRate * input^T * error
+        The error already includes the gradient of the loss
+        */
+        if (!pInputLayer) return;
+
+        std::vector<ILayer<T>*> toProcess;
+        std::set<ILayer<T>*> visited;
+
+        // Collect all layers
+        toProcess.push_back(pInputLayer);
+        visited.insert(pInputLayer);
+
+        for (size_t i = 0; i < toProcess.size(); ++i) {
+            ILayer<T>* pCurLayer = toProcess[i];
+            if (!pCurLayer) continue;
+
+            // Add siblings to processing queue
+            for (ILayer<T>* pNextLayer : pCurLayer->getSiblings()) {
+                if (visited.find(pNextLayer) == visited.end()) {
+                    toProcess.push_back(pNextLayer);
+                    visited.insert(pNextLayer);
+                }
+
+                // Get current weights and errors
+                ml::Mat<T> weights = pCurLayer->getWeights(pNextLayer);
+                if (!weights.IsGood()) continue;
+
+                ml::Mat<T> errors = pNextLayer->getErrors();
+                if (!errors.IsGood()) continue;
+
+                // Get activated output from current layer
+                ml::Mat<T> activated = pCurLayer->getActivatedInput();
+                if (!activated.IsGood()) continue;
+
+                // Add bias to activated output to match weight dimensions
+                ml::Mat<T> activatedWithBias = activated.Copy();
+                for (int b = 0; b < ILayer<T>::GetNumBiasNodes(); ++b)
+                    pushBiasCol<T>(activatedWithBias);
+
+                // Compute weight update: delta_W = learningRate * error^T * activation
+                // errors is (1, m), activatedWithBias is (1, n+bias)
+                // weights are (m, n+bias)
+                // Update: W_new = W_old + learningRate * error^T * activation
+
+                ml::Mat<T> errorTransposed = errors.Copy();
+                errorTransposed.Transpose();  // (m, 1)
+
+                // Compute outer product: (m, 1) * (1, n+bias) = (m, n+bias)
+                ml::Mat<T> weightDelta = ml::Mult<T>(errorTransposed, activatedWithBias, true);
+
+                // Create updated weights matrix
+                ml::Mat<T> updatedWeights = weights.Copy();
+                for (int row = 0; row < updatedWeights.size().cy; ++row) {
+                    for (int col = 0; col < updatedWeights.size().cx; ++col) {
+                        T delta = weightDelta.getAt(row, col);
+                        // Clip delta to prevent exploding gradients
+                        if (std::abs(delta) > 10.0) {
+                            delta = (delta > 0) ? 10.0 : -10.0;
+                        }
+                        T newWeight = updatedWeights.getAt(row, col) + learningRate * delta;
+                        updatedWeights.setAt(row, col, newWeight);
+                    }
+                }
+
+                // Store the updated weights back
+                pCurLayer->setWeights(pNextLayer, updatedWeights);
             }
         }
     }
