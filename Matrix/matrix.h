@@ -468,10 +468,10 @@ namespace ml {
         Mat m3(m1.size(), 0);
         for (int i = 0; i < m1.size().cy; ++i) {
             for (int j = 0; j < m1.size().cx; ++j) {
-                m3.setAt(i, j, m1.getAt(i,j) + m2.getAt(i,j));
+                m3.setAt(i, j, m1.getAt(i,j) * m2.getAt(i,j));
             }
         }
-        return m3; 
+        return m3;
     }
 
 
