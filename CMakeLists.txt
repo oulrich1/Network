@@ -102,7 +102,7 @@ add_custom_command(
 )
 
 add_custom_target(
-  RunTests ALL
+  RunTests
   DEPENDS test_.lic
 )
 

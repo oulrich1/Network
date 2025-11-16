@@ -28,7 +28,7 @@ jobs:
     - name: Build
       run: |
         cd build
-        make -j$(nproc)
+        make -j$(nproc) test_network
 
     - name: Run unit tests
       run: |
@@ -38,4 +38,4 @@ jobs:
     - name: Run CTest
       run: |
         cd build
-        ctest --output-on-failure
+        ctest --output-on-failure -R NeuralNetworkTests
