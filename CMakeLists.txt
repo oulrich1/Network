@@ -190,3 +190,17 @@ set (MNIST_LOADER_TEST_TARGET_NAME "test_mnist_loader")
 set (MNIST_LOADER_TEST_SOURCE_FILES "test_mnist_loader.cpp")
 add_executable(${MNIST_LOADER_TEST_TARGET_NAME} ${MNIST_LOADER_TEST_SOURCE_FILES})
 target_link_libraries(${MNIST_LOADER_TEST_TARGET_NAME} ${EXTRA_LIBS})
+
+# # # # MNIST TRAINING # # #
+
+set (TRAIN_MNIST_TARGET_NAME "train_mnist")
+set (TRAIN_MNIST_SOURCE_FILES "train_mnist.cpp")
+add_executable(${TRAIN_MNIST_TARGET_NAME} ${TRAIN_MNIST_SOURCE_FILES})
+target_link_libraries(${TRAIN_MNIST_TARGET_NAME} ${EXTRA_LIBS})
+
+# # # # MNIST TRAINING TESTS # # #
+
+set (TEST_MNIST_TRAINING_TARGET_NAME "test_mnist_training")
+set (TEST_MNIST_TRAINING_SOURCE_FILES "test_mnist_training.cpp")
+add_executable(${TEST_MNIST_TRAINING_TARGET_NAME} ${TEST_MNIST_TRAINING_SOURCE_FILES})
+target_link_libraries(${TEST_MNIST_TRAINING_TARGET_NAME} ${EXTRA_LIBS})
