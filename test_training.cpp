@@ -38,9 +38,12 @@ void test_xor_training() {
     network->connect(inputLayer, hiddenLayer);
     network->connect(hiddenLayer, outputLayer);
     network->setOutputLayer(outputLayer);
+
+    // Use MSE loss for XOR (better for simple regression-like problems)
+    network->setLossType(LossType::MSE);
     network->init();
 
-    cout << ">> Network initialized with 2-4-1 architecture" << endl;
+    cout << ">> Network initialized with 2-4-1 architecture (MSE loss)" << endl;
 
     // XOR training data: [input1, input2] -> [expected_output]
     // XOR truth table:
@@ -168,9 +171,12 @@ void test_and_gate_training() {
     network->connect(inputLayer, hiddenLayer);
     network->connect(hiddenLayer, outputLayer);
     network->setOutputLayer(outputLayer);
+
+    // Use MSE loss for AND gate (better for simple regression-like problems)
+    network->setLossType(LossType::MSE);
     network->init();
 
-    cout << ">> Network initialized with 2-2-1 architecture" << endl;
+    cout << ">> Network initialized with 2-2-1 architecture (MSE loss)" << endl;
 
     // AND truth table: both inputs must be 1 for output to be 1
     vector<Mat<T>> inputs;
@@ -407,9 +413,12 @@ void test_or_gate_training() {
     network->connect(inputLayer, hiddenLayer);
     network->connect(hiddenLayer, outputLayer);
     network->setOutputLayer(outputLayer);
+
+    // Use MSE loss for OR gate (better for simple regression-like problems)
+    network->setLossType(LossType::MSE);
     network->init();
 
-    cout << ">> Network initialized with 2-2-1 architecture" << endl;
+    cout << ">> Network initialized with 2-2-1 architecture (MSE loss)" << endl;
 
     // OR truth table: output is 1 if any input is 1
     vector<Mat<T>> inputs;

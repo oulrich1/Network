@@ -11,6 +11,7 @@
 #include "utility.h"
 #include "activation.h"
 #include "optimizer.h"
+#include "loss.h"
 #include "thirdparty/jsonxx/jsonxx.h"
 
 
@@ -61,24 +62,6 @@ namespace ml {
         T* col = makeBias<T>(mat.size().cy, bias);
         mat.pushCol(col);
         delete[] col;
-    }
-
-
-    template <typename T>
-    ml::Mat<T> Sigmoid(ml::Mat<T> mat) {
-        ml::Mat<T> result(mat.size(), 0);
-        for (int i = 0; i < mat.size().cy; ++i) {
-            for (int j = 0; j < mat.size().cx; ++j) {
-                T val = mat.getAt(i, j);
-                result.setAt(i, j, 1.0 / (1.0 + std::exp(-val)));
-            }
-        }
-        return result;
-    }
-
-    template <typename T>
-    ml::Mat<T> SigGrad(ml::Mat<T> mat) {
-        return ElementMult(mat, Diff(T(1), mat));
     }
 }
 
@@ -508,6 +491,16 @@ namespace ml {
             mOwnsOptimizer = true;
         }
 
+        // Loss function configuration
+        void setLossType(LossType type) { mLossType = type; }
+        LossType getLossType() const { return mLossType; }
+
+        // Batch training methods
+        virtual void        trainSingle(const ml::Mat<T>& input, const ml::Mat<T>& target, T learningRate);
+        virtual void        trainBatch(const ml::Mat<T>& inputs, const ml::Mat<T>& targets, T learningRate);
+        virtual T           evaluateLoss(const ml::Mat<T>& inputs, const ml::Mat<T>& targets);
+        virtual T           evaluateAccuracy(const ml::Mat<T>& inputs, const ml::Mat<T>& targets);
+
         // ILayer<T> overrides
     public:
         virtual void        init() override;
@@ -552,6 +545,7 @@ namespace ml {
         ILayer<T>* pOutputLayer;
         IOptimizer<T>* mOptimizer;
         bool mOwnsOptimizer;
+        LossType mLossType;
     };
 
 
@@ -574,6 +568,8 @@ namespace ml {
         // Default to SGD optimizer
         mOptimizer = new SGDOptimizer<T>();
         mOwnsOptimizer = true;
+        // Default to Cross-Entropy loss for classification
+        mLossType = LossType::CROSS_ENTROPY;
     }
 
     template <typename T>
@@ -1195,6 +1191,228 @@ namespace ml {
 
         std::cout << "Model loaded from " << filename << std::endl;
         return true;
+    }
+
+    /**
+     * Train on a single sample
+     * Performs forward pass, backpropagation, and weight update for one input-target pair
+     */
+    template <typename T>
+    void Network<T>::trainSingle(const ml::Mat<T>& input, const ml::Mat<T>& target, T learningRate) {
+        // Forward pass
+        ml::Mat<T> predicted = feed(input);
+
+        // Compute loss gradient
+        ml::Mat<T> error = ComputeLossGradient<T>(predicted, target, mLossType);
+        getOutputLayer()->setErrors(error);
+
+        // Backward pass
+        backprop();
+
+        // Update weights
+        updateWeights(learningRate);
+    }
+
+    /**
+     * Train on a batch of samples
+     * Accumulates gradients over the batch and updates weights once
+     */
+    template <typename T>
+    void Network<T>::trainBatch(const ml::Mat<T>& inputs, const ml::Mat<T>& targets, T learningRate) {
+        int batchSize = inputs.size().cy;
+        if (batchSize == 0 || inputs.size().cy != targets.size().cy) {
+            std::cerr << "Error: Invalid batch - inputs and targets must have same number of rows" << std::endl;
+            return;
+        }
+
+        // Store weight gradients for accumulation
+        std::map<ILayer<T>*, std::map<ILayer<T>*, ml::Mat<T>>> accumulatedGradients;
+
+        // Process each sample in the batch
+        for (int i = 0; i < batchSize; i++) {
+            // Extract single sample
+            ml::Mat<T> sampleInput(1, inputs.size().cx, 0);
+            ml::Mat<T> sampleTarget(1, targets.size().cx, 0);
+
+            for (int j = 0; j < inputs.size().cx; j++) {
+                sampleInput.setAt(0, j, inputs.getAt(i, j));
+            }
+            for (int j = 0; j < targets.size().cx; j++) {
+                sampleTarget.setAt(0, j, targets.getAt(i, j));
+            }
+
+            // Forward pass
+            ml::Mat<T> predicted = feed(sampleInput);
+
+            // Compute loss gradient
+            ml::Mat<T> error = ComputeLossGradient<T>(predicted, sampleTarget, mLossType);
+            getOutputLayer()->setErrors(error);
+
+            // Backward pass
+            backprop();
+
+            // Accumulate gradients (but don't update weights yet)
+            std::vector<ILayer<T>*> toProcess;
+            std::set<ILayer<T>*> visited;
+
+            toProcess.push_back(pInputLayer);
+            visited.insert(pInputLayer);
+
+            for (size_t idx = 0; idx < toProcess.size(); ++idx) {
+                ILayer<T>* pCurLayer = toProcess[idx];
+                if (!pCurLayer) continue;
+
+                for (ILayer<T>* pNextLayer : pCurLayer->getSiblings()) {
+                    if (visited.find(pNextLayer) == visited.end()) {
+                        toProcess.push_back(pNextLayer);
+                        visited.insert(pNextLayer);
+                    }
+
+                    ml::Mat<T> errors = pNextLayer->getErrors();
+                    if (!errors.IsGood()) continue;
+
+                    ml::Mat<T> activated = pCurLayer->getActivatedInput();
+                    if (!activated.IsGood()) continue;
+
+                    // Add bias to activated output
+                    ml::Mat<T> activatedWithBias = activated.Copy();
+                    for (int b = 0; b < ILayer<T>::GetNumBiasNodes(); ++b)
+                        pushBiasCol<T>(activatedWithBias);
+
+                    ml::Mat<T> weights = pCurLayer->getWeights(pNextLayer);
+                    if (!weights.IsGood()) continue;
+
+                    // Compute gradients
+                    ml::Mat<T> gradients(weights.size(), 0);
+                    int numOutputs = errors.size().cx;
+                    int numInputs = activatedWithBias.size().cx;
+
+                    for (int row = 0; row < numOutputs; ++row) {
+                        T err = errors.getAt(0, row);
+                        for (int col = 0; col < numInputs; ++col) {
+                            T act = activatedWithBias.getAt(0, col);
+                            gradients.setAt(row, col, err * act);
+                        }
+                    }
+
+                    // Accumulate gradients
+                    if (accumulatedGradients.find(pCurLayer) == accumulatedGradients.end() ||
+                        accumulatedGradients[pCurLayer].find(pNextLayer) == accumulatedGradients[pCurLayer].end()) {
+                        accumulatedGradients[pCurLayer][pNextLayer] = gradients;
+                    } else {
+                        // Add to existing gradients
+                        for (int r = 0; r < gradients.size().cy; ++r) {
+                            for (int c = 0; c < gradients.size().cx; ++c) {
+                                T oldVal = accumulatedGradients[pCurLayer][pNextLayer].getAt(r, c);
+                                accumulatedGradients[pCurLayer][pNextLayer].setAt(r, c, oldVal + gradients.getAt(r, c));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Average gradients and update weights
+        int layerIdx = 0;
+        for (auto& layerPair : accumulatedGradients) {
+            ILayer<T>* pCurLayer = layerPair.first;
+            int siblingIdx = 0;
+
+            for (auto& siblingPair : layerPair.second) {
+                ILayer<T>* pNextLayer = siblingPair.first;
+                ml::Mat<T>& avgGradients = siblingPair.second;
+
+                // Average the accumulated gradients
+                for (int r = 0; r < avgGradients.size().cy; ++r) {
+                    for (int c = 0; c < avgGradients.size().cx; ++c) {
+                        T avgVal = avgGradients.getAt(r, c) / batchSize;
+                        avgGradients.setAt(r, c, avgVal);
+                    }
+                }
+
+                // Update weights using optimizer
+                ml::Mat<T> weights = pCurLayer->getWeights(pNextLayer);
+                ml::Mat<T> updatedWeights = weights.Copy();
+
+                std::string layerKey = pCurLayer->getName() + "_to_" + pNextLayer->getName() +
+                                       "_" + std::to_string(layerIdx) + "_" + std::to_string(siblingIdx);
+
+                mOptimizer->updateWeights(updatedWeights, avgGradients, learningRate, layerKey);
+                pCurLayer->setWeights(pNextLayer, updatedWeights);
+
+                siblingIdx++;
+            }
+            layerIdx++;
+        }
+    }
+
+    /**
+     * Evaluate loss on a dataset
+     * Returns the average loss over all samples
+     */
+    template <typename T>
+    T Network<T>::evaluateLoss(const ml::Mat<T>& inputs, const ml::Mat<T>& targets) {
+        int numSamples = inputs.size().cy;
+        if (numSamples == 0 || inputs.size().cy != targets.size().cy) {
+            return T(0.0);
+        }
+
+        T totalLoss = T(0.0);
+
+        for (int i = 0; i < numSamples; i++) {
+            // Extract single sample
+            ml::Mat<T> sampleInput(1, inputs.size().cx, 0);
+            ml::Mat<T> sampleTarget(1, targets.size().cx, 0);
+
+            for (int j = 0; j < inputs.size().cx; j++) {
+                sampleInput.setAt(0, j, inputs.getAt(i, j));
+            }
+            for (int j = 0; j < targets.size().cx; j++) {
+                sampleTarget.setAt(0, j, targets.getAt(i, j));
+            }
+
+            // Forward pass
+            ml::Mat<T> predicted = feed(sampleInput);
+
+            // Compute loss for this sample
+            T sampleLoss = ComputeLoss<T>(predicted, sampleTarget, mLossType);
+            totalLoss += sampleLoss;
+        }
+
+        return totalLoss / numSamples;
+    }
+
+    /**
+     * Evaluate accuracy on a dataset
+     * Returns accuracy as a percentage (0-100)
+     */
+    template <typename T>
+    T Network<T>::evaluateAccuracy(const ml::Mat<T>& inputs, const ml::Mat<T>& targets) {
+        int numSamples = inputs.size().cy;
+        if (numSamples == 0 || inputs.size().cy != targets.size().cy) {
+            return T(0.0);
+        }
+
+        // Create predictions matrix
+        ml::Mat<T> allPredictions(numSamples, targets.size().cx, 0);
+
+        for (int i = 0; i < numSamples; i++) {
+            // Extract single sample
+            ml::Mat<T> sampleInput(1, inputs.size().cx, 0);
+            for (int j = 0; j < inputs.size().cx; j++) {
+                sampleInput.setAt(0, j, inputs.getAt(i, j));
+            }
+
+            // Forward pass
+            ml::Mat<T> predicted = feed(sampleInput);
+
+            // Store predictions
+            for (int j = 0; j < targets.size().cx; j++) {
+                allPredictions.setAt(i, j, predicted.getAt(0, j));
+            }
+        }
+
+        return ComputeAccuracy<T>(allPredictions, targets);
     }
 
 } // namespace ml

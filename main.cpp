@@ -52,7 +52,7 @@ void test2() {
 void test3() {
 	using namespace std;
 	using namespace ml;
-	typedef int T;
+	typedef double T;
 
 	Timer<float> timer;
 	timer.start();
@@ -97,7 +97,7 @@ void test3() {
 void test_crazy_network_1() {
     using namespace std;
     using namespace ml;
-    typedef int T;
+    typedef double T;
 
     Timer<float> timer;
     timer.start();

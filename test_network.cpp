@@ -38,7 +38,7 @@ void test_sigmoid() {
     cout << ">> Sigmoid function test PASSED" << endl;
 }
 
-// Test 2: Test SigGrad (Sigmoid Gradient) function
+// Test 2: Test SigmoidGrad (Sigmoid Gradient) function
 void test_sigmoid_gradient() {
     BEGIN_TESTS("Testing Sigmoid Gradient Function");
     typedef double T;
@@ -50,7 +50,7 @@ void test_sigmoid_gradient() {
     sigmoidOutput.setAt(1, 0, 0.269);
     sigmoidOutput.setAt(1, 1, 0.881);
 
-    Mat<T> gradient = SigGrad<T>(sigmoidOutput);
+    Mat<T> gradient = SigmoidGrad<T>(sigmoidOutput);
 
     // Sigmoid gradient is: sig(x) * (1 - sig(x))
     // For sig(x) = 0.5: grad = 0.5 * 0.5 = 0.25

@@ -217,7 +217,7 @@ void test_sigmoid_gradient() {
     Mat<T> halfMat(1, 1, 0);
     halfMat.setAt(0, 0, 0.5);  // Set value explicitly since constructor takes int
 
-    Mat<T> grad = SigGrad<T>(halfMat);
+    Mat<T> grad = SigmoidGrad<T>(halfMat);
     T gradValue = grad.getAt(0, 0);
     bool test1 = approxEqual(gradValue, 0.25, 1e-5);
     printTestResult("σ'(σ(0)) = 0.25", test1);
@@ -227,14 +227,14 @@ void test_sigmoid_gradient() {
     nearZero.setAt(0, 0, 0.001);
     Mat<T> nearOne(1, 1, 0);
     nearOne.setAt(0, 0, 0.999);
-    T gradNearZero = SigGrad<T>(nearZero).getAt(0, 0);
-    T gradNearOne = SigGrad<T>(nearOne).getAt(0, 0);
+    T gradNearZero = SigmoidGrad<T>(nearZero).getAt(0, 0);
+    T gradNearOne = SigmoidGrad<T>(nearOne).getAt(0, 0);
     bool test2 = (gradNearZero < 0.001 && gradNearOne < 0.001);
     printTestResult("Gradient near 0 and 1 is small", test2);
 
     // Test 3: Maximum gradient is at 0.5
     Mat<T> values{{0.1, 0.3, 0.5, 0.7, 0.9}};
-    Mat<T> grads = SigGrad<T>(values);
+    Mat<T> grads = SigmoidGrad<T>(values);
     T maxGrad = grads.getAt(0, 2); // Should be at 0.5
     bool test3 = true;
     for (int i = 0; i < 5; ++i) {
@@ -571,6 +571,9 @@ void test_xor_convergence() {
     network->connect(inputLayer, hiddenLayer);
     network->connect(hiddenLayer, outputLayer);
     network->setOutputLayer(outputLayer);
+
+    // Use MSE loss for XOR (better for simple regression-like problems)
+    network->setLossType(LossType::MSE);
     network->init();
 
     // XOR training data
@@ -596,12 +599,13 @@ void test_xor_convergence() {
     T finalError = 0;
 
     // Training loop
+    // Note: Using manual training loop instead of trainSingle API to match existing test expectations
     for (int epoch = 0; epoch < epochs; ++epoch) {
         T totalError = 0;
 
         for (size_t i = 0; i < inputs.size(); ++i) {
             Mat<T> output = network->feed(inputs[i]);
-            Mat<T> error = Diff<T>(expected[i], output);
+            Mat<T> error = Diff<T>(expected[i], output);  // target - predicted
 
             T sampleError = 0;
             for (int j = 0; j < error.size().cx; ++j) {
