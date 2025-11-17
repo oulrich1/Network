@@ -8,6 +8,7 @@ A C++ implementation of a basic neural network with forward and backward propaga
 - ✅ Backward propagation for error computation
 - ✅ Flexible layer architecture (supports arbitrary network topologies)
 - ✅ Matrix operations optimized with OpenMP
+- ✅ Model serialization (save/load weights to/from JSON files)
 - ✅ Comprehensive unit test suite
 - ✅ CI/CD with GitHub Actions
 
@@ -27,8 +28,12 @@ cd build
 make test_network
 ./test_network
 
-# Or use CTest
-ctest -R NeuralNetworkTests --output-on-failure
+# Run model save/load tests
+make test_model_save_load
+./test_model_save_load
+
+# Or use CTest to run all tests
+ctest --output-on-failure
 ```
 
 ## Usage Example
@@ -88,6 +93,91 @@ Mat<double> activated = Sigmoid(input);
 
 // Sigmoid gradient
 Mat<double> grad = SigGrad(activated);
+```
+
+## Model Serialization
+
+Save and load trained network weights to/from JSON files:
+
+### Saving a Model
+
+```cpp
+// After training your network...
+network->init();
+// ... perform training ...
+
+// Save the model to a file
+if (network->saveToFile("my_model.json")) {
+    std::cout << "Model saved successfully!" << std::endl;
+}
+```
+
+### Loading a Model
+
+```cpp
+// Create a network with the same structure as the saved model
+Network<double>* network = new Network<double>();
+
+ILayer<double>* inputLayer  = new Layer<double>(2, "Input");
+ILayer<double>* hiddenLayer = new Layer<double>(4, "Hidden");
+ILayer<double>* outputLayer = new Layer<double>(1, "Output");
+
+network->setInputLayer(inputLayer);
+network->connect(inputLayer, hiddenLayer);
+network->connect(hiddenLayer, outputLayer);
+network->setOutputLayer(outputLayer);
+
+// Initialize with random weights (will be overwritten)
+network->init();
+
+// Load the saved weights
+if (network->loadFromFile("my_model.json")) {
+    std::cout << "Model loaded successfully!" << std::endl;
+
+    // Now you can use the network for inference
+    Mat<double> input(1, 2, 0);
+    input.setAt(0, 0, 1.0);
+    input.setAt(0, 1, 0.5);
+    Mat<double> output = network->feed(input);
+}
+```
+
+### JSON File Format
+
+The saved model contains:
+- **layers**: Array of layer information (name, input size, output size)
+- **weights**: Weight matrices between connected layers
+
+Example:
+```json
+{
+  "layers": [
+    {"index": 0, "name": "Input", "input_size": 2, "output_size": 3},
+    {"index": 1, "name": "Hidden", "input_size": 4, "output_size": 5},
+    {"index": 2, "name": "Output", "input_size": 1, "output_size": 2}
+  ],
+  "weights": [
+    {
+      "from_index": 0,
+      "to_index": 1,
+      "rows": 4,
+      "cols": 3,
+      "values": [0.123, -0.456, ...]
+    }
+  ]
+}
+```
+
+**Important**: When loading a model, the network structure (number of layers and their sizes) must match the saved model exactly.
+
+### Testing Save/Load
+
+Run the save/load test to see a complete example:
+
+```bash
+cd build
+make test_model_save_load
+./test_model_save_load
 ```
 
 ## Architecture
