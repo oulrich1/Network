@@ -9,6 +9,11 @@ _old/**
 .idea/
 .idea/**
 
+# Compiled test binaries
+test_*
+!test_*.cpp
+!test_*.h
+
 # Mac OSX Specific GitIgnores
 .DS_Store
 .AppleDouble
