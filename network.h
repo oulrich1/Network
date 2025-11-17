@@ -62,6 +62,24 @@ namespace ml {
         mat.pushCol(col);
         delete[] col;
     }
+
+
+    template <typename T>
+    ml::Mat<T> Sigmoid(ml::Mat<T> mat) {
+        ml::Mat<T> result(mat.size(), 0);
+        for (int i = 0; i < mat.size().cy; ++i) {
+            for (int j = 0; j < mat.size().cx; ++j) {
+                T val = mat.getAt(i, j);
+                result.setAt(i, j, 1.0 / (1.0 + std::exp(-val)));
+            }
+        }
+        return result;
+    }
+
+    template <typename T>
+    ml::Mat<T> SigGrad(ml::Mat<T> mat) {
+        return ElementMult(mat, Diff(T(1), mat));
+    }
 }
 
 

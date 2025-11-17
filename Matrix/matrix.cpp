@@ -384,15 +384,15 @@ void matrix_print_value(T& v, char* comma) {
 
 template <>
 void matrix_print_value<int>(int& v, char* comma) {
-    printf("%0.2d%s ", v, comma);
+    printf("%d%s ", v, comma);
 }
 template <>
 void matrix_print_value<unsigned int>(unsigned int& v, char* comma) {
-    printf("%0.2u%s ", v, comma);
+    printf("%u%s ", v, comma);
 }
 template <>
 void matrix_print_value<long>(long& v, char* comma) {
-    printf("%0.2l%s ", v, comma);
+    printf("%ld%s ", v, comma);
 }
 
 template <typename T>
