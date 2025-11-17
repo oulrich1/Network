@@ -5,8 +5,12 @@
 #include <set>
 #include <algorithm>
 #include <fstream>
+#include <memory>
 #include "math/rect.h"
 #include "Matrix/matrix.h"
+#include "utility.h"
+#include "activation.h"
+#include "optimizer.h"
 #include "thirdparty/jsonxx/jsonxx.h"
 
 
@@ -347,7 +351,7 @@ namespace ml {
     public:
         typedef ILayer<T> baseclass;
     public:
-        Layer(int numNodes, std::string name = "");
+        Layer(int numNodes, std::string name = "", ActivationType activation = ActivationType::SIGMOID, T alpha = 0.01);
         virtual ~Layer();
 
     protected:
@@ -362,12 +366,24 @@ namespace ml {
         virtual ml::Mat<T> getInput() override;
         virtual ml::Mat<T> getActivatedInput() override;
         virtual void setActivatedInput(ml::Mat<T> activatedInput) override;
+
+        // Activation configuration
+        ActivationType getActivationType() const { return mActivationType; }
+        void setActivationType(ActivationType type) { mActivationType = type; }
+        T getActivationAlpha() const { return mActivationAlpha; }
+        void setActivationAlpha(T alpha) { mActivationAlpha = alpha; }
+
+    private:
+        ActivationType mActivationType;
+        T mActivationAlpha; // For Leaky ReLU, ELU, etc.
     };
 
 
     template <typename T>
-    Layer<T>::Layer(int numNodes, std::string name) : baseclass() {
+    Layer<T>::Layer(int numNodes, std::string name, ActivationType activation, T alpha) : baseclass() {
         this->setNumInputNodes(numNodes);
+        mActivationType = activation;
+        mActivationAlpha = alpha;
         common_construct();
         baseclass::setName(name);
     }
@@ -398,9 +414,9 @@ namespace ml {
         if (!inputMat.IsGood())
             return;
 
-        // Store the raw input and compute activation
+        // Store the raw input and compute activation using configured activation function
         this->mInput     = inputMat.Copy();
-        this->mActivated = Sigmoid<T>(this->mInput);
+        this->mActivated = Activate<T>(this->mInput, mActivationType, mActivationAlpha);
 
         // CRITICAL FIX: Add bias to the ACTIVATED values, not the pre-activation values
         // Create a copy of activated values with bias for forward propagation
@@ -483,6 +499,15 @@ namespace ml {
         virtual bool        saveToFile(const std::string& filename);
         virtual bool        loadFromFile(const std::string& filename);
 
+        // Optimizer configuration
+        void setOptimizer(IOptimizer<T>* optimizer) { mOptimizer = optimizer; mOwnsOptimizer = false; }
+        IOptimizer<T>* getOptimizer() const { return mOptimizer; }
+        void setOptimizerType(OptimizerType type) {
+            if (mOptimizer && mOwnsOptimizer) delete mOptimizer;
+            mOptimizer = CreateOptimizer<T>(type);
+            mOwnsOptimizer = true;
+        }
+
         // ILayer<T> overrides
     public:
         virtual void        init() override;
@@ -525,6 +550,8 @@ namespace ml {
     private:
         ILayer<T>* pInputLayer;
         ILayer<T>* pOutputLayer;
+        IOptimizer<T>* mOptimizer;
+        bool mOwnsOptimizer;
     };
 
 
@@ -544,11 +571,18 @@ namespace ml {
         //ILayer<T>::AddToLayersMap(this);
         pInputLayer = NULL;
         pOutputLayer = NULL;
+        // Default to SGD optimizer
+        mOptimizer = new SGDOptimizer<T>();
+        mOwnsOptimizer = true;
     }
 
     template <typename T>
     Network<T>::~Network() {
         mOutputLayerSiblingCache.clear();
+        if (mOptimizer && mOwnsOptimizer) {
+            delete mOptimizer;
+            mOptimizer = NULL;
+        }
     }
 
 
@@ -695,7 +729,17 @@ namespace ml {
                 // Compute weighted error: W^T * error = (n+bias, m) * (m, 1) = (n+bias, 1)
                 ml::Mat<T> weightedErr = ml::Mult<T>(weightsT, errorCol, true);
 
-                ml::Mat<T> deltaSig = SigGrad<T>(activatedInput);
+                // Get activation gradient based on layer's activation type
+                Layer<T>* pPrevLayerConcrete = dynamic_cast<Layer<T>*>(pPrevLayer);
+                ml::Mat<T> deltaSig;
+                if (pPrevLayerConcrete) {
+                    deltaSig = ActivateGrad<T>(activatedInput,
+                                               pPrevLayerConcrete->getActivationType(),
+                                               pPrevLayerConcrete->getActivationAlpha());
+                } else {
+                    // Fallback to sigmoid for non-Layer types
+                    deltaSig = SigmoidGrad<T>(activatedInput);
+                }
 
                 // Strip bias rows from weighted errors to match dimensions of deltaSig
                 // weightedErr is a column vector (cx=1, cy=outputSize) which includes bias
@@ -726,12 +770,11 @@ namespace ml {
     template <typename T>
     void Network<T>::updateWeights(T learningRate) {
         /*
-        Update weights using gradient descent:
+        Update weights using the configured optimizer:
         For each layer, compute weight gradients from activations and errors,
-        then update weights: W = W + learningRate * input^T * error
-        The error already includes the gradient of the loss
+        then delegate to optimizer to update weights
         */
-        if (!pInputLayer) return;
+        if (!pInputLayer || !mOptimizer) return;
 
         std::vector<ILayer<T>*> toProcess;
         std::set<ILayer<T>*> visited;
@@ -745,6 +788,7 @@ namespace ml {
             if (!pCurLayer) continue;
 
             // Add siblings to processing queue
+            int siblingIdx = 0;
             for (ILayer<T>* pNextLayer : pCurLayer->getSiblings()) {
                 if (visited.find(pNextLayer) == visited.end()) {
                     toProcess.push_back(pNextLayer);
@@ -767,40 +811,37 @@ namespace ml {
                 for (int b = 0; b < ILayer<T>::GetNumBiasNodes(); ++b)
                     pushBiasCol<T>(activatedWithBias);
 
-                // Compute weight update: delta_W = error^T * activation (outer product)
+                // Compute weight gradients: delta_W = error^T * activation (outer product)
                 // errors is (1, m) row vector, activatedWithBias is (1, n+bias) row vector
                 // weights are (m, n+bias)
                 // Result: delta_W (m, n+bias) where delta_W[i,j] = error[i] * activation[j]
 
-                // Manual outer product since Mult() doesn't handle this case properly
-                ml::Mat<T> weightDelta(weights.size(), 0);
+                ml::Mat<T> gradients(weights.size(), 0);
                 int numOutputs = errors.size().cx;  // m
                 int numInputs = activatedWithBias.size().cx;  // n+bias
 
-                for (int i = 0; i < numOutputs; ++i) {
-                    T err = errors.getAt(0, i);
-                    for (int j = 0; j < numInputs; ++j) {
-                        T act = activatedWithBias.getAt(0, j);
-                        weightDelta.setAt(i, j, err * act);
+                for (int row = 0; row < numOutputs; ++row) {
+                    T err = errors.getAt(0, row);
+                    for (int col = 0; col < numInputs; ++col) {
+                        T act = activatedWithBias.getAt(0, col);
+                        gradients.setAt(row, col, err * act);
                     }
                 }
 
-                // Create updated weights matrix
+                // Create unique key for this layer-sibling pair for optimizer state tracking
+                std::string layerKey = pCurLayer->getName() + "_to_" + pNextLayer->getName() +
+                                       "_" + std::to_string(i) + "_" + std::to_string(siblingIdx);
+
+                // Get modifiable reference to weights
                 ml::Mat<T> updatedWeights = weights.Copy();
-                for (int row = 0; row < updatedWeights.size().cy; ++row) {
-                    for (int col = 0; col < updatedWeights.size().cx; ++col) {
-                        T delta = weightDelta.getAt(row, col);
-                        // Clip delta to prevent exploding gradients
-                        if (std::abs(delta) > 10.0) {
-                            delta = (delta > 0) ? 10.0 : -10.0;
-                        }
-                        T newWeight = updatedWeights.getAt(row, col) + learningRate * delta;
-                        updatedWeights.setAt(row, col, newWeight);
-                    }
-                }
+
+                // Use optimizer to update weights
+                mOptimizer->updateWeights(updatedWeights, gradients, learningRate, layerKey);
 
                 // Store the updated weights back
                 pCurLayer->setWeights(pNextLayer, updatedWeights);
+
+                siblingIdx++;
             }
         }
     }

@@ -7,6 +7,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stack>
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 #ifdef  _DEBUG
 #define DEBUG(t, message) 		(Utility::Debug(t, message))
