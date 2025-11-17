@@ -4,8 +4,10 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <fstream>
 #include "math/rect.h"
 #include "Matrix/matrix.h"
+#include "thirdparty/jsonxx/jsonxx.h"
 
 
 using namespace std;
@@ -476,6 +478,10 @@ namespace ml {
         virtual ml::Mat<T>  getOutput();
         virtual void        connect(ILayer<T>* l1, ILayer<T>* l2);
         virtual void        connect(ILayer<T>* nextLayer);
+
+        // Model serialization
+        virtual bool        saveToFile(const std::string& filename);
+        virtual bool        loadFromFile(const std::string& filename);
 
         // ILayer<T> overrides
     public:
@@ -954,6 +960,200 @@ namespace ml {
     template <typename T>
     void Network<T>::addOutputLayerSiblings(ILayer<T>* sibling) {
         mOutputLayerSiblingCache.push_back(sibling);
+    }
+
+    template <typename T>
+    bool Network<T>::saveToFile(const std::string& filename) {
+        if (!pInputLayer || !pOutputLayer) {
+            std::cerr << "Error: Cannot save network - input or output layer not set" << std::endl;
+            return false;
+        }
+
+        jsonxx::Object root;
+        jsonxx::Array layersArray;
+
+        // Collect all layers in order from input to output
+        std::vector<ILayer<T>*> allLayers;
+        std::set<ILayer<T>*> visited;
+        std::vector<ILayer<T>*> toProcess;
+
+        toProcess.push_back(pInputLayer);
+        visited.insert(pInputLayer);
+
+        for (size_t i = 0; i < toProcess.size(); ++i) {
+            ILayer<T>* pCurLayer = toProcess[i];
+            allLayers.push_back(pCurLayer);
+
+            for (ILayer<T>* pNextLayer : pCurLayer->getSiblings()) {
+                if (visited.find(pNextLayer) == visited.end()) {
+                    toProcess.push_back(pNextLayer);
+                    visited.insert(pNextLayer);
+                }
+            }
+        }
+
+        // Save layer information with indices
+        std::map<ILayer<T>*, int> layerIndices;
+        for (size_t i = 0; i < allLayers.size(); ++i) {
+            jsonxx::Object layerObj;
+            layerObj << "index" << (jsonxx::Number)i;
+            layerObj << "name" << allLayers[i]->getName();
+            layerObj << "input_size" << (jsonxx::Number)allLayers[i]->getInputSize();
+            layerObj << "output_size" << (jsonxx::Number)allLayers[i]->getOutputSize();
+            layersArray << layerObj;
+            layerIndices[allLayers[i]] = i;
+        }
+        root << "layers" << layersArray;
+
+        // Save weights between layers
+        jsonxx::Array weightsArray;
+        for (size_t i = 0; i < allLayers.size(); ++i) {
+            ILayer<T>* pCurLayer = allLayers[i];
+
+            for (ILayer<T>* pNextLayer : pCurLayer->getSiblings()) {
+                ml::Mat<T> weights = pCurLayer->getWeights(pNextLayer);
+                if (!weights.IsGood()) continue;
+
+                jsonxx::Object weightObj;
+                weightObj << "from_index" << (jsonxx::Number)layerIndices[pCurLayer];
+                weightObj << "to_index" << (jsonxx::Number)layerIndices[pNextLayer];
+                weightObj << "rows" << (jsonxx::Number)weights.size().cy;
+                weightObj << "cols" << (jsonxx::Number)weights.size().cx;
+
+                // Save weight values as a flat array
+                jsonxx::Array weightValues;
+                for (int row = 0; row < weights.size().cy; ++row) {
+                    for (int col = 0; col < weights.size().cx; ++col) {
+                        weightValues << (jsonxx::Number)weights.getAt(row, col);
+                    }
+                }
+                weightObj << "values" << weightValues;
+                weightsArray << weightObj;
+            }
+        }
+        root << "weights" << weightsArray;
+
+        // Write to file
+        std::ofstream outFile(filename);
+        if (!outFile.is_open()) {
+            std::cerr << "Error: Could not open file for writing: " << filename << std::endl;
+            return false;
+        }
+
+        outFile << root.json();
+        outFile.close();
+
+        std::cout << "Model saved to " << filename << std::endl;
+        return true;
+    }
+
+    template <typename T>
+    bool Network<T>::loadFromFile(const std::string& filename) {
+        std::ifstream inFile(filename);
+        if (!inFile.is_open()) {
+            std::cerr << "Error: Could not open file for reading: " << filename << std::endl;
+            return false;
+        }
+
+        std::stringstream buffer;
+        buffer << inFile.rdbuf();
+        inFile.close();
+
+        jsonxx::Object root;
+        if (!root.parse(buffer.str())) {
+            std::cerr << "Error: Failed to parse JSON from file: " << filename << std::endl;
+            return false;
+        }
+
+        if (!root.has<jsonxx::Array>("layers") || !root.has<jsonxx::Array>("weights")) {
+            std::cerr << "Error: Invalid model file format - missing layers or weights" << std::endl;
+            return false;
+        }
+
+        // Collect all layers in the current network
+        std::vector<ILayer<T>*> allLayers;
+        std::set<ILayer<T>*> visited;
+        std::vector<ILayer<T>*> toProcess;
+
+        if (!pInputLayer) {
+            std::cerr << "Error: Cannot load weights - network structure not initialized" << std::endl;
+            return false;
+        }
+
+        toProcess.push_back(pInputLayer);
+        visited.insert(pInputLayer);
+
+        for (size_t i = 0; i < toProcess.size(); ++i) {
+            ILayer<T>* pCurLayer = toProcess[i];
+            allLayers.push_back(pCurLayer);
+
+            for (ILayer<T>* pNextLayer : pCurLayer->getSiblings()) {
+                if (visited.find(pNextLayer) == visited.end()) {
+                    toProcess.push_back(pNextLayer);
+                    visited.insert(pNextLayer);
+                }
+            }
+        }
+
+        // Verify layer structure matches
+        const jsonxx::Array& layersArray = root.get<jsonxx::Array>("layers");
+        if (layersArray.size() != allLayers.size()) {
+            std::cerr << "Error: Layer count mismatch - file has " << layersArray.size()
+                      << " layers but network has " << allLayers.size() << std::endl;
+            return false;
+        }
+
+        for (size_t i = 0; i < layersArray.size(); ++i) {
+            const jsonxx::Object& layerObj = layersArray.get<jsonxx::Object>(i);
+            size_t fileInputSize = (size_t)layerObj.get<jsonxx::Number>("input_size");
+            size_t networkInputSize = allLayers[i]->getInputSize();
+
+            if (fileInputSize != networkInputSize) {
+                std::cerr << "Error: Layer " << i << " size mismatch - file has "
+                          << fileInputSize << " inputs but network has " << networkInputSize << std::endl;
+                return false;
+            }
+        }
+
+        // Load weights
+        const jsonxx::Array& weightsArray = root.get<jsonxx::Array>("weights");
+        for (size_t i = 0; i < weightsArray.size(); ++i) {
+            const jsonxx::Object& weightObj = weightsArray.get<jsonxx::Object>(i);
+
+            int fromIndex = (int)weightObj.get<jsonxx::Number>("from_index");
+            int toIndex = (int)weightObj.get<jsonxx::Number>("to_index");
+            int rows = (int)weightObj.get<jsonxx::Number>("rows");
+            int cols = (int)weightObj.get<jsonxx::Number>("cols");
+
+            if (fromIndex < 0 || fromIndex >= (int)allLayers.size() ||
+                toIndex < 0 || toIndex >= (int)allLayers.size()) {
+                std::cerr << "Error: Invalid layer indices in weight matrix" << std::endl;
+                return false;
+            }
+
+            ILayer<T>* pFromLayer = allLayers[fromIndex];
+            ILayer<T>* pToLayer = allLayers[toIndex];
+
+            ml::Mat<T> weights(rows, cols, 0);
+            const jsonxx::Array& values = weightObj.get<jsonxx::Array>("values");
+
+            int idx = 0;
+            for (int row = 0; row < rows; ++row) {
+                for (int col = 0; col < cols; ++col) {
+                    if (idx >= (int)values.size()) {
+                        std::cerr << "Error: Not enough weight values in file" << std::endl;
+                        return false;
+                    }
+                    weights.setAt(row, col, (T)values.get<jsonxx::Number>(idx));
+                    idx++;
+                }
+            }
+
+            pFromLayer->setWeights(pToLayer, weights);
+        }
+
+        std::cout << "Model loaded from " << filename << std::endl;
+        return true;
     }
 
 } // namespace ml

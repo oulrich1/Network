@@ -52,6 +52,11 @@ if (USE_NN_MATRIX)
   set (EXTRA_LIBS ${EXTRA_LIBS} Matrix)
 endif(USE_NN_MATRIX)
 
+# include jsonxx for model serialization
+include_directories("${PROJECT_SOURCE_DIR}/thirdparty/jsonxx")
+add_library(jsonxx STATIC thirdparty/jsonxx/jsonxx.cpp)
+set (EXTRA_LIBS ${EXTRA_LIBS} jsonxx)
+
 
 # add the executable
 set (NN_SOURCE_FILES "main.cpp")
@@ -158,3 +163,11 @@ set (COMPREHENSIVE_TEST_SOURCE_FILES "test_comprehensive.cpp")
 add_executable(${COMPREHENSIVE_TEST_TARGET_NAME} ${COMPREHENSIVE_TEST_SOURCE_FILES})
 target_link_libraries(${COMPREHENSIVE_TEST_TARGET_NAME} ${EXTRA_LIBS})
 add_test(NAME ComprehensiveTests COMMAND test_comprehensive)
+
+# # # # MODEL SAVE/LOAD TESTS # # #
+
+set (SAVE_LOAD_TEST_TARGET_NAME "test_model_save_load")
+set (SAVE_LOAD_TEST_SOURCE_FILES "test_model_save_load.cpp")
+add_executable(${SAVE_LOAD_TEST_TARGET_NAME} ${SAVE_LOAD_TEST_SOURCE_FILES})
+target_link_libraries(${SAVE_LOAD_TEST_TARGET_NAME} ${EXTRA_LIBS})
+add_test(NAME ModelSaveLoadTests COMMAND test_model_save_load)
