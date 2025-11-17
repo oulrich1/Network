@@ -36,6 +36,91 @@ make test_model_save_load
 ctest --output-on-failure
 ```
 
+## Running Toy Example Training
+
+The project includes toy example training tests that demonstrate network learning on simple patterns:
+
+### Quick Start
+
+```bash
+# From project root
+./build.sh                     # Build the project
+cd build
+make test_training             # Compile training tests
+./test_training                # Run all training tests
+```
+
+### What Gets Tested
+
+The `test_training` executable runs multiple training scenarios:
+
+1. **Linear Regression** (`y = 2x + 1`)
+   - Architecture: 1-8-1 (1 input, 8 hidden, 1 output)
+   - 50,000 epochs with learning rate 0.1
+   - Target: MSE < 0.01
+   - Performance: ~5-15 seconds (with -O3 optimization)
+
+2. **XOR Logic Gate**
+   - Architecture: 2-4-1
+   - 10,000 epochs with learning rate 0.1
+   - Target: >90% accuracy
+
+3. **AND Logic Gate**
+   - Architecture: 2-2-1
+   - 5,000 epochs with learning rate 0.5
+   - Target: >90% accuracy
+
+4. **OR Logic Gate**
+   - Architecture: 2-2-1
+   - 5,000 epochs with learning rate 0.5
+   - Target: >90% accuracy
+
+### Performance Timing
+
+Each test now includes timing information:
+- **Training time**: Time spent in the training loop
+- **Testing time**: Time spent evaluating the network
+
+Example output:
+```
+>> Training complete. Time: 12345 ms
+>> Testing complete. Time: 2 ms
+>> Final MSE (on normalized values): 0.00173
+>> Accuracy (within 5% tolerance): 72.7% (8/11 samples)
+```
+
+### Building with Optimizations
+
+For faster training, build in Release mode with optimizations:
+
+```bash
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make test_training -j4
+./test_training
+```
+
+**Performance difference:**
+- Debug mode (`-O0`): ~5+ minutes for linear regression
+- Release mode (`-O3`): ~5-15 seconds for linear regression (10-60x faster!)
+
+### Comparing with PyTorch
+
+A PyTorch baseline implementation is provided for comparison:
+
+```bash
+# Install dependencies (if needed)
+pip install torch numpy matplotlib
+
+# Run PyTorch comparison
+python3 pytorch_toy_example/linear_regression_comparison.py
+```
+
+This generates:
+- Console output with training progress
+- Comparison plot: `pytorch_toy_example/comparison_results.png`
+- Performance benchmarks for both linear regression and neural network approaches
+
 ## Usage Example
 
 ```cpp
