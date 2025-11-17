@@ -239,6 +239,141 @@ void test_and_gate_training() {
     delete network;
 }
 
+// Test simple linear regression: y = 2x + 1 (normalized to [0,1] for sigmoid)
+void test_linear_regression() {
+    BEGIN_TESTS("Testing Linear Regression: y = 2x + 1 (normalized) (MSE < 0.01, Accuracy > 95%)");
+    typedef double T;
+
+    // Create network: 1 input -> 8 hidden -> 1 output
+    Network<T>* network = new Network<T>();
+    ILayer<T>* inputLayer = new Layer<T>(1, "Input");
+    ILayer<T>* hiddenLayer = new Layer<T>(8, "Hidden");
+    ILayer<T>* outputLayer = new Layer<T>(1, "Output");
+
+    network->setInputLayer(inputLayer);
+    network->connect(inputLayer, hiddenLayer);
+    network->connect(hiddenLayer, outputLayer);
+    network->setOutputLayer(outputLayer);
+    network->init();
+
+    cout << ">> Network initialized with 1-8-1 architecture" << endl;
+
+    // Generate training data for y = 2x + 1, normalized to [0,1]
+    // Original: y = 2x + 1, with x in [0,1], y in [1,3]
+    // Normalized: y_norm = (y - 1) / 2, so y_norm in [0,1]
+    // Using 10 evenly spaced points in [0, 1]
+    vector<Mat<T>> inputs;
+    vector<Mat<T>> expected;
+    vector<T> originalTargets;  // Store original values for display
+
+    for (int i = 0; i <= 10; ++i) {
+        T x = i / 10.0;  // 0.0, 0.1, 0.2, ..., 1.0
+        T y_original = 2.0 * x + 1.0;  // y = 2x + 1 (range [1,3])
+        T y_normalized = (y_original - 1.0) / 2.0;  // Normalize to [0,1]
+
+        Mat<T> input(1, 1, 0);
+        input.setAt(0, 0, x);
+        inputs.push_back(input);
+
+        Mat<T> target(1, 1, 0);
+        target.setAt(0, 0, y_normalized);
+        expected.push_back(target);
+
+        originalTargets.push_back(y_original);
+    }
+
+    cout << ">> Generated " << inputs.size() << " training samples for y = 2x + 1" << endl;
+    cout << ">> Outputs normalized to [0,1] for sigmoid: y_norm = (2x + 1 - 1) / 2 = x" << endl;
+    cout << ">> Sample data: x=0.0 -> y=1.0 (norm=0.0), x=0.5 -> y=2.0 (norm=0.5), x=1.0 -> y=3.0 (norm=1.0)" << endl;
+
+    // Training parameters
+    const int epochs = 50000;
+    const T learningRate = 0.1;
+
+    cout << ">> Training for " << epochs << " epochs with learning rate " << learningRate << endl;
+
+    // Training loop
+    for (int epoch = 0; epoch < epochs; ++epoch) {
+        T totalError = 0;
+
+        // Train on each sample
+        for (size_t i = 0; i < inputs.size(); ++i) {
+            // Forward pass
+            Mat<T> output = network->feed(inputs[i]);
+
+            // Compute error
+            Mat<T> error = Diff<T>(expected[i], output);
+            T sampleError = error.getAt(0, 0) * error.getAt(0, 0);
+            totalError += sampleError;
+
+            // Backward pass
+            outputLayer->setErrors(error);
+            network->backprop();
+
+            // Update weights
+            network->updateWeights(learningRate);
+        }
+
+        // Print progress every 5000 epochs
+        if (epoch % 5000 == 0 || epoch == epochs - 1) {
+            T mse = totalError / inputs.size();
+            cout << "Epoch " << epoch << " - MSE: " << mse << endl;
+        }
+    }
+
+    cout << "\n>> Training complete. Testing network..." << endl;
+
+    // Test the trained network
+    T totalSquaredError = 0;
+    int withinTolerance = 0;
+    const T tolerance = 0.05;  // 5% relative error tolerance
+
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        Mat<T> output = network->feed(inputs[i]);
+        T predicted_normalized = output.getAt(0, 0);
+        T target_normalized = expected[i].getAt(0, 0);
+
+        // Denormalize for display
+        T predicted_original = predicted_normalized * 2.0 + 1.0;
+        T target_original = originalTargets[i];
+
+        // Calculate error on normalized values (what network actually trains on)
+        T error_normalized = target_normalized - predicted_normalized;
+        T squaredError = error_normalized * error_normalized;
+        totalSquaredError += squaredError;
+
+        // Check if within 5% relative error (on original scale for interpretability)
+        T error_original = target_original - predicted_original;
+        T relativeError = std::abs(error_original / target_original);
+        if (relativeError < tolerance) {
+            withinTolerance++;
+        }
+
+        T x = inputs[i].getAt(0, 0);
+        cout << "  x=" << x << " : predicted=" << predicted_original
+             << " (norm=" << predicted_normalized << ")"
+             << ", target=" << target_original
+             << " (norm=" << target_normalized << ")"
+             << ", error=" << error_original
+             << ", relative_error=" << (relativeError * 100.0) << "%" << endl;
+    }
+
+    T mse = totalSquaredError / inputs.size();
+    T accuracy = (100.0 * withinTolerance) / inputs.size();
+
+    cout << "\n>> Final MSE (on normalized values): " << mse << endl;
+    cout << ">> Accuracy (within 5% tolerance): " << accuracy << "% ("
+         << withinTolerance << "/" << inputs.size() << " samples)" << endl;
+
+    // Assert MSE < 0.01 and accuracy > 95%
+    assert(mse < 0.01);
+    assert(accuracy > 95.0);
+
+    cout << ">> Linear regression test PASSED (MSE < 0.01, Accuracy > 95%)" << endl;
+
+    delete network;
+}
+
 // Test OR gate with training
 void test_or_gate_training() {
     BEGIN_TESTS("Testing OR Gate Training (>90% accuracy)");
@@ -333,6 +468,8 @@ int main() {
     cout << "==================================================" << endl;
 
     try {
+        test_linear_regression();
+        cout << endl;
         test_xor_training();
         cout << endl;
         test_and_gate_training();
@@ -342,7 +479,7 @@ int main() {
         cout << endl;
         cout << "==================================================" << endl;
         cout << "    ALL TRAINING TESTS PASSED!" << endl;
-        cout << "    All networks achieved >90% accuracy" << endl;
+        cout << "    All networks achieved target accuracy/MSE" << endl;
         cout << "==================================================" << endl;
         return 0;
     }
