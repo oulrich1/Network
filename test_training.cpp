@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cassert>
 #include <cmath>
+#include <chrono>
 #include "allheader.h"
 #include "network.h"
 
@@ -292,6 +293,9 @@ void test_linear_regression() {
 
     cout << ">> Training for " << epochs << " epochs with learning rate " << learningRate << endl;
 
+    // Start timing training
+    auto train_start = std::chrono::high_resolution_clock::now();
+
     // Training loop
     for (int epoch = 0; epoch < epochs; ++epoch) {
         T totalError = 0;
@@ -321,7 +325,14 @@ void test_linear_regression() {
         }
     }
 
-    cout << "\n>> Training complete. Testing network..." << endl;
+    // End timing training
+    auto train_end = std::chrono::high_resolution_clock::now();
+    auto train_duration = std::chrono::duration_cast<std::chrono::milliseconds>(train_end - train_start);
+    cout << "\n>> Training complete. Time: " << train_duration.count() << " ms" << endl;
+    cout << ">> Testing network..." << endl;
+
+    // Start timing testing
+    auto test_start = std::chrono::high_resolution_clock::now();
 
     // Test the trained network
     T totalSquaredError = 0;
@@ -358,10 +369,15 @@ void test_linear_regression() {
              << ", relative_error=" << (relativeError * 100.0) << "%" << endl;
     }
 
+    // End timing testing
+    auto test_end = std::chrono::high_resolution_clock::now();
+    auto test_duration = std::chrono::duration_cast<std::chrono::milliseconds>(test_end - test_start);
+
     T mse = totalSquaredError / inputs.size();
     T accuracy = (100.0 * withinTolerance) / inputs.size();
 
-    cout << "\n>> Final MSE (on normalized values): " << mse << endl;
+    cout << "\n>> Testing complete. Time: " << test_duration.count() << " ms" << endl;
+    cout << ">> Final MSE (on normalized values): " << mse << endl;
     cout << ">> Accuracy (within 5% tolerance): " << accuracy << "% ("
          << withinTolerance << "/" << inputs.size() << " samples)" << endl;
 
