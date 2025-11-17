@@ -6,9 +6,21 @@ project (NeuralNet)
 # set(CMAKE_CXX_COMPILER g++)
 # set(CMAKE_C_COMPILER gcc)
 
+# Set default build type to Release if not specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build (Debug or Release)" FORCE)
+endif()
+
+# Optimization flags
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native" CACHE STRING "Flags used by the C++ compiler during release builds")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -march=native" CACHE STRING "Flags used by the C compiler during release builds")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Flags used by the C++ compiler during debug builds")
+set(CMAKE_C_FLAGS_DEBUG "-g -O0" CACHE STRING "Flags used by the C compiler during debug builds")
+
 set(CXX_COMMON_FLAGS "" CACHE STRING "")
 set(CMAKE_CXX_FLAGS "${CXX_COMMON_FLAGS}")
 set(CMAKE_C_FLAGS "${CXX_COMMON_FLAGS}")
+MESSAGE( STATUS "CMAKE_BUILD_TYPE:      " ${CMAKE_BUILD_TYPE} )
 MESSAGE( STATUS "CMAKE_CXX_FLAGS:       " ${CMAKE_CXX_FLAGS} )
 MESSAGE( STATUS "CMAKE_C_FLAGS:         " ${CMAKE_CXX_FLAGS} )
 add_definitions(-std=c++11 -funroll-loops -fno-permissive)
