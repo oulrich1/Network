@@ -1,4 +1,4 @@
-.PHONY: run_test_training build_dir test_training
+.PHONY: run_test_training build_dir test_training test_mnist_loader run_test_mnist_loader
 
 # Default target
 all: build_dir
@@ -20,4 +20,12 @@ test_training: build_dir
 # Build and run test_training
 run_test_training: test_training
 	cd build && ./test_training
+
+# Build the test_mnist_loader target
+test_mnist_loader: build_dir
+	cd build && make test_mnist_loader
+
+# Build and run test_mnist_loader
+run_test_mnist_loader: test_mnist_loader
+	cd build && ./test_mnist_loader
 

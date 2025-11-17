@@ -183,3 +183,10 @@ set (SAVE_LOAD_TEST_SOURCE_FILES "test_model_save_load.cpp")
 add_executable(${SAVE_LOAD_TEST_TARGET_NAME} ${SAVE_LOAD_TEST_SOURCE_FILES})
 target_link_libraries(${SAVE_LOAD_TEST_TARGET_NAME} ${EXTRA_LIBS})
 add_test(NAME ModelSaveLoadTests COMMAND test_model_save_load)
+
+# # # # MNIST DATA LOADER TESTS # # #
+
+set (MNIST_LOADER_TEST_TARGET_NAME "test_mnist_loader")
+set (MNIST_LOADER_TEST_SOURCE_FILES "test_mnist_loader.cpp")
+add_executable(${MNIST_LOADER_TEST_TARGET_NAME} ${MNIST_LOADER_TEST_SOURCE_FILES})
+target_link_libraries(${MNIST_LOADER_TEST_TARGET_NAME} ${EXTRA_LIBS})
