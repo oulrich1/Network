@@ -1,16 +1,68 @@
 # Neural Network Library
 
-A C++ implementation of a basic neural network with forward and backward propagation, featuring flexible layer architecture and comprehensive unit tests.
+A C++ implementation of a flexible neural network library with forward and backward propagation, featuring multiple activation functions, modern optimizers, and comprehensive unit tests.
 
 ## Features
 
-- ✅ Forward propagation with sigmoid activation
-- ✅ Backward propagation for error computation
-- ✅ Flexible layer architecture (supports arbitrary network topologies)
-- ✅ Matrix operations optimized with OpenMP
-- ✅ Model serialization (save/load weights to/from JSON files)
+### ✅ What's Available
+
+**Network Architecture:**
+- ✅ Fully connected (dense) feedforward networks
+- ✅ Arbitrary layer sizes and network depths
+- ✅ Flexible layer connections (supports arbitrary network topologies)
+- ✅ Composable networks (networks as layers)
+
+**Activation Functions:**
+- ✅ **Sigmoid** - Classic activation, range (0, 1)
+- ✅ **ReLU** - Rectified Linear Unit, best for hidden layers
+- ✅ **Leaky ReLU** - Prevents dying ReLU problem
+- ✅ **Tanh** - Hyperbolic tangent, range (-1, 1)
+- ✅ **Softmax** - Multi-class classification output
+- ✅ **ELU** - Exponential Linear Unit
+- ✅ **SELU** - Self-normalizing ELU variant
+- ✅ **Linear** - Identity function for regression
+
+**Optimizers:**
+- ✅ **SGD** - Stochastic Gradient Descent with gradient clipping
+- ✅ **Momentum** - SGD with momentum (β=0.9 default)
+- ✅ **Adam** - Adaptive moment estimation (β1=0.9, β2=0.999)
+
+**Training & Optimization:**
+- ✅ Backpropagation for error computation
+- ✅ Xavier/Glorot weight initialization
+- ✅ Gradient clipping for stability
+- ✅ Configurable learning rates
+
+**Infrastructure:**
+- ✅ Matrix operations optimized with OpenMP and SSE
+- ✅ Model serialization (save/load weights to/from JSON)
 - ✅ Comprehensive unit test suite
 - ✅ CI/CD with GitHub Actions
+- ✅ Cross-platform (x86/x64 and ARM/Apple Silicon)
+
+### ❌ What's Missing
+
+**Advanced Network Types:**
+- ❌ Convolutional layers (CNN)
+- ❌ Pooling layers (MaxPool, AvgPool)
+- ❌ Recurrent layers (RNN, LSTM, GRU)
+- ❌ Attention mechanisms
+
+**Training Features:**
+- ❌ Batch training (currently sample-by-sample only)
+- ❌ Mini-batch gradient descent
+- ❌ Batch normalization
+- ❌ Dropout regularization
+- ❌ L1/L2 weight regularization
+
+**Loss Functions:**
+- ❌ Cross-entropy loss (currently using MSE only)
+- ❌ Multiple loss function options
+
+**Advanced Optimizers:**
+- ❌ AdaGrad, RMSprop
+- ❌ Learning rate scheduling
+- ❌ Adaptive learning rate decay
 
 ## Building
 
@@ -31,6 +83,12 @@ make test_network
 # Run model save/load tests
 make test_model_save_load
 ./test_model_save_load
+
+# Run activation functions and optimizer tests
+g++ -std=c++11 -O3 -fopenmp -msse2 -I. \
+    test_activations_optimizers.cpp Matrix/matrix.cpp thirdparty/jsonxx/jsonxx.cpp \
+    -o test_activations_optimizers
+./test_activations_optimizers
 
 # Or use CTest to run all tests
 ctest --output-on-failure
@@ -123,23 +181,30 @@ This generates:
 
 ## Usage Example
 
+### Basic Network with Custom Activations
+
 ```cpp
 #include "network.h"
 
 using namespace ml;
 
-// Create a simple 3-layer network: 2 inputs -> 4 hidden -> 1 output
+// Create a 3-layer network with ReLU hidden layers and sigmoid output
+// Architecture: 2 inputs -> 4 hidden (ReLU) -> 1 output (Sigmoid)
 Network<double>* network = new Network<double>();
 
-ILayer<double>* inputLayer  = new Layer<double>(2, "Input");
-ILayer<double>* hiddenLayer = new Layer<double>(4, "Hidden");
-ILayer<double>* outputLayer = new Layer<double>(1, "Output");
+// Create layers with specific activation functions
+Layer<double>* inputLayer  = new Layer<double>(2, "Input", ActivationType::LINEAR);
+Layer<double>* hiddenLayer = new Layer<double>(4, "Hidden", ActivationType::RELU);
+Layer<double>* outputLayer = new Layer<double>(1, "Output", ActivationType::SIGMOID);
 
 // Connect layers
 network->setInputLayer(inputLayer);
 network->connect(inputLayer, hiddenLayer);
 network->connect(hiddenLayer, outputLayer);
 network->setOutputLayer(outputLayer);
+
+// Set optimizer (default is SGD)
+network->setOptimizerType(OptimizerType::ADAM);  // or MOMENTUM, SGD
 
 // Initialize weights
 network->init();
@@ -151,15 +216,47 @@ input.setAt(0, 1, 0.5);
 
 Mat<double> output = network->feed(input);
 
-// Backward pass
+// Backward pass and weight update
 Mat<double> targetOutput(1, 1, 0.8);
 Mat<double> error = Diff(targetOutput, output);
 outputLayer->setErrors(error);
 network->backprop();
+network->updateWeights(0.01);  // learning rate = 0.01
 
-// Access propagated errors
-Mat<double> hiddenErrors = hiddenLayer->getErrors();
-Mat<double> inputErrors = inputLayer->getErrors();
+// Training loop example
+for (int epoch = 0; epoch < 1000; epoch++) {
+    Mat<double> output = network->feed(input);
+    outputLayer->setErrors(Diff(targetOutput, output));
+    network->backprop();
+    network->updateWeights(0.01);
+}
+```
+
+### Available Activation Functions
+
+```cpp
+// When creating layers, specify activation type:
+Layer<double>* layer1 = new Layer<double>(10, "Layer1", ActivationType::RELU);
+Layer<double>* layer2 = new Layer<double>(10, "Layer2", ActivationType::TANH);
+Layer<double>* layer3 = new Layer<double>(10, "Layer3", ActivationType::SIGMOID);
+Layer<double>* layer4 = new Layer<double>(10, "Layer4", ActivationType::SOFTMAX);
+
+// For Leaky ReLU or ELU, you can specify the alpha parameter:
+Layer<double>* leaky = new Layer<double>(10, "Leaky", ActivationType::LEAKY_RELU, 0.01);
+Layer<double>* elu = new Layer<double>(10, "ELU", ActivationType::ELU, 1.0);
+```
+
+### Available Optimizers
+
+```cpp
+// Set optimizer type
+network->setOptimizerType(OptimizerType::SGD);       // Basic SGD with gradient clipping
+network->setOptimizerType(OptimizerType::MOMENTUM);  // SGD with momentum (β=0.9)
+network->setOptimizerType(OptimizerType::ADAM);      // Adam optimizer (β1=0.9, β2=0.999)
+
+// Or create and set a custom optimizer
+AdamOptimizer<double>* adam = new AdamOptimizer<double>(0.9, 0.999, 1e-8);
+network->setOptimizer(adam);
 ```
 
 ## Matrix Operations
@@ -173,11 +270,14 @@ Mat<double> result = ElementMult(m1, m2);
 // Matrix multiplication
 Mat<double> result = Mult(m1, m2);
 
-// Sigmoid activation
-Mat<double> activated = Sigmoid(input);
+// Activation functions (using unified interface)
+Mat<double> activated = Activate(input, ActivationType::RELU);
+Mat<double> grad = ActivateGrad(activated, ActivationType::RELU);
 
-// Sigmoid gradient
-Mat<double> grad = SigGrad(activated);
+// Or use specific activation functions directly
+Mat<double> sigmoid_out = Sigmoid(input);
+Mat<double> relu_out = ReLU(input);
+Mat<double> tanh_out = Tanh(input);
 ```
 
 ## Model Serialization
