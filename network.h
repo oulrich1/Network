@@ -74,7 +74,7 @@ namespace ml {
 
     template <typename T>
     ml::Mat<T> SigGrad(ml::Mat<T> mat) {
-        return ml::ElementMult(mat, ml::Diff<T>(1, mat)); 
+        return ElementMult(mat, Diff(T(1), mat));
     }
 }
 
