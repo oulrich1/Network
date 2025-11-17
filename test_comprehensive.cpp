@@ -571,6 +571,9 @@ void test_xor_convergence() {
     network->connect(inputLayer, hiddenLayer);
     network->connect(hiddenLayer, outputLayer);
     network->setOutputLayer(outputLayer);
+
+    // Use MSE loss for XOR (better for simple regression-like problems)
+    network->setLossType(LossType::MSE);
     network->init();
 
     // XOR training data
@@ -596,12 +599,13 @@ void test_xor_convergence() {
     T finalError = 0;
 
     // Training loop
+    // Note: Using manual training loop instead of trainSingle API to match existing test expectations
     for (int epoch = 0; epoch < epochs; ++epoch) {
         T totalError = 0;
 
         for (size_t i = 0; i < inputs.size(); ++i) {
             Mat<T> output = network->feed(inputs[i]);
-            Mat<T> error = Diff<T>(expected[i], output);
+            Mat<T> error = Diff<T>(expected[i], output);  // target - predicted
 
             T sampleError = 0;
             for (int j = 0; j < error.size().cx; ++j) {

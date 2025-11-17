@@ -8,6 +8,28 @@ namespace ml {
 
 /**
  * Loss function types
+ *
+ * Choosing the right loss function:
+ *
+ * MSE (Mean Squared Error):
+ *   - Best for: Regression tasks, simple binary gates (XOR, AND, OR)
+ *   - Output range: Any real number
+ *   - Use when: Predicting continuous values or simple binary problems
+ *   - Example: House price prediction, temperature forecasting, XOR
+ *
+ * CROSS_ENTROPY:
+ *   - Best for: Multi-class classification
+ *   - Output range: Probabilities [0, 1]
+ *   - Use when: Classifying into multiple categories (MNIST, ImageNet)
+ *   - Example: Digit recognition (0-9), object classification
+ *   - Note: Pair with Sigmoid or Softmax output activation
+ *
+ * BINARY_CROSS_ENTROPY:
+ *   - Best for: Binary classification
+ *   - Output range: Probability [0, 1]
+ *   - Use when: Two-class problems with probability interpretation
+ *   - Example: Spam detection, sentiment analysis (positive/negative)
+ *   - Note: Pair with Sigmoid output activation
  */
 enum class LossType {
     MSE,                    // Mean Squared Error (for regression)
